@@ -23,6 +23,33 @@ class GroupPresentationTest {
         assertTrue(canStartFlight(groups[2], listOf(first.copy(phase = FlightPhase.LANDED),
             GroupFrame(groups[1], FlightPhase.FLYING))))
     }
+    @Test fun movesSharingATubeStartAtOnceUnlessTheirStonesAreStillArriving() {
+        val board = Board(listOf(Tube(4, listOf(0, 1, 0)), Tube(4, listOf(1, 0)), Tube(4, listOf(1)), Tube(4)))
+        fun group(id: Long, before: Board, move: Move) =
+            MovingGroup(id, before, move, requireNotNull(PuzzleRules.transfer(before, move)).count)
+        val first = group(0, board, Move(0, 3))                    // coral from tube 0 into the empty tube
+        val after = PuzzleRules.replay(board, listOf(first.move))
+        val flying = listOf(GroupFrame(first, FlightPhase.FLYING))
+        val waiting = listOf(GroupFrame(first, FlightPhase.WAITING))
+        val sameDestination = group(1, after, Move(1, 3))          // another coral into that tube
+        val sameSource = group(1, after, Move(0, 2))               // the next group out of tube 0
+        val intoVacated = group(1, after, Move(2, 0))              // mint poured into the tube it left
+        val liftsArriving = group(1, after, Move(3, 1))            // the arriving coral itself
+        assertTrue(canStartFlight(sameDestination, flying))
+        assertTrue(canStartFlight(sameSource, flying))
+        assertTrue(canStartFlight(intoVacated, flying))
+        assertFalse(canStartFlight(liftsArriving, flying))
+        assertTrue(canStartFlight(liftsArriving, listOf(GroupFrame(first, FlightPhase.LANDED))))
+        // Nothing overtakes a move that has not left yet.
+        for (later in listOf(sameDestination, sameSource, intoVacated, liftsArriving)) assertFalse(canStartFlight(later, waiting))
+        assertEquals(listOf(first), mustLandAfter(sameDestination, listOf(first)))
+        assertTrue(mustLandAfter(sameSource, listOf(first)).isEmpty())
+        // Reconstruction stays consistent while both are in the air and in either landing order.
+        val frames = mutableListOf(GroupFrame(first, FlightPhase.FLYING), GroupFrame(sameSource, FlightPhase.FLYING))
+        assertEquals(listOf(listOf(0), listOf(1, 0), listOf(1), emptyList()), stationaryPieces(frames, after))
+        frames[1] = frames[1].copy(phase = FlightPhase.LANDED)
+        assertEquals(listOf(listOf(0), listOf(1, 0), listOf(1, 1), emptyList()), stationaryPieces(frames, after))
+    }
     @Test fun stationaryAndFlyingPiecesConserveColorsAcrossOverlappingPhases() {
         val frames = groups.map { GroupFrame(it, FlightPhase.WAITING) }.toMutableList()
         val original = initial.tubes.flatMap { it.balls }.sorted()

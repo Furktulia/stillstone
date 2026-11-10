@@ -38,6 +38,13 @@ Compact boards: the space above the board and between rows now scales with stone
 32 dp are unchanged; a 360x640 dp screen with 130% text and six five-slot tubes gets
 roughly 19 dp stones instead of 13 dp. Unit-tested only, not viewed at that size.
 
+Responsiveness (2026-11-10): Hint is available while stones travel (it reads the committed
+board). A move now starts as soon as its own stones are standing in its source tube: it no
+longer waits for an earlier group that shares a tube, except when it would lift the stones
+that group is still delivering. Arrivals in one tube stay in move order (a faster later
+group waits above the tube). Two groups following each other closely on the same route can
+overlap visually in the air; collisions between groups in flight are still not modelled.
+
 ## Material and sound polish
 
 - Finish the nearly smooth stone/bone feel: restrained reflected lighting and subtle

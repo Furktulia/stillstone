@@ -204,7 +204,8 @@ class GameViewModel(
     }
 
     fun hint() {
-        if (state.value.loading || state.value.transfer != null || session.board.isSolved) return
+        // Hints read the committed board, so they never need to wait for stones to finish travelling.
+        if (state.value.loading || session.board.isSolved) return
         invalidate()
         val board = session.board
         val cached = knownSolutions[board]

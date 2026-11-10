@@ -115,7 +115,8 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                     if (ready && !flight.started) {
                         val route = currentRoutes
                         val source = group.move.source
-                        flight.lift = settling.offset(source, settling.size(source) - group.count)
+                        flight.lift = settling.offset(source, group.before.tubes[source].balls.size - group.count)
+                        val ahead = mustLandAfter(group, groups.take(index)).mapNotNull { runtimes[it.id] }
                         flight.started = true
                         if (route != null) {
                             val slot = layout.first().slot
@@ -129,6 +130,8 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                             // destination's top stone actually is, even while it is still bouncing.
                             val destination = group.move.destination
                             val release = releaseFractions[index]
+                            // A shorter route must not overtake a group already heading for this tube.
+                            while (ahead.any { !it.landed }) withFrameNanos { }
                             var elapsed = 0f
                             var last = withFrameNanos { it }
                             var height = 0f
