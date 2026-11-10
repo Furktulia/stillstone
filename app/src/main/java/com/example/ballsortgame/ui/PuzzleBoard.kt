@@ -31,6 +31,15 @@ import com.example.ballsortgame.game.GameUiState
 val PieceColors = listOf(Color(0xFFEB9791), Color(0xFF86CDB6), Color(0xFFE7C36D), Color(0xFF8CB7E8), Color(0xFFB7A0DE))
 val PieceNames = listOf("coral", "mint", "gold", "blue", "lilac")
 
+/**
+ * Stone travel is part of play, not decoration. Android's "remove animations" and some
+ * power-saving modes set the system animation scale to zero, which would make the
+ * approach finish instantly. The game's own Reduced motion setting is the control.
+ */
+private object FullMotion : androidx.compose.ui.MotionDurationScale {
+    override val scaleFactor: Float get() = 1f
+}
+
 private class GroupFlight {
     val progress = Animatable(0f)
     var started by mutableStateOf(false)
@@ -113,7 +122,9 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                             val longest = route.length / slot
                             val approachMs = (580 + longest * releaseFractions[index] * 12).toInt().coerceIn(600, 900)
                             val fallMs = (135 * kotlin.math.sqrt(drops[index] / slot)).toInt().coerceIn(120, 520)
-                            flight.progress.animateTo(LandingMotion.release, tween(approachMs, easing = FastOutSlowInEasing))
+                            kotlinx.coroutines.withContext(FullMotion) {
+                                flight.progress.animateTo(LandingMotion.release, tween(approachMs, easing = FastOutSlowInEasing))
+                            }
                             // The fall is stepped by hand so that contact happens wherever the
                             // destination's top stone actually is, even while it is still bouncing.
                             val destination = group.move.destination

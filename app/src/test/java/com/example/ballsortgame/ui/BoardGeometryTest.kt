@@ -23,6 +23,19 @@ class BoardGeometryTest {
         }
     }
 
+    @Test fun fullSizeBoardsAreUnchangedAndShortBoardsGetLargerStones() {
+        // Six five-slot tubes on a normal phone board: same stone size as the original fixed spacing.
+        val normal = boardGeometry(List(6) { 5 }, 371f, 560f, 1f)
+        assertEquals((560f - 52f * 2 - 40f) / 2 + 40f, normal[3].top - normal[0].top, 0.5f)
+        assertEquals(((560f - 52f * 2 - 40f) / 2 - 28f) / 5, normal[0].slot, 0.05f)
+        // The same puzzle with large text on a small phone leaves a much shorter board.
+        val compact = boardGeometry(List(6) { 5 }, 320f, 330f, 1f)
+        assertTrue("slot ${compact[0].slot}", compact[0].slot >= 18.5f)
+        assertTrue(compact[0].top - compact[0].slot >= 0f) // Room for a stone to travel above the top row.
+        assertTrue(compact[3].top - compact[0].bottom >= compact[0].slot * 1.14f)
+        assertTrue(compact[5].bottom + 21f <= 330f) // Tube number still fits below the last row.
+    }
+
     @Test fun incompleteLastRowIsCentered() {
         val layout = boardGeometry(List(5) { 3 }, 400f, 500f, 1f)
         assertEquals(400f, layout[3].centerX + layout[4].centerX, 0.01f)

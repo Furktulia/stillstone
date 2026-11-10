@@ -24,10 +24,19 @@ Creator feedback (emulator): the motion is liked. Rebound after long falls was t
 small to reach an overhead tube, so LandingMotion.reboundHeight now returns up to 55%
 of drops beyond about five slots (cap seven slots). Needs their review.
 
-Deferred, not diagnosed: on a Samsung Galaxy A51s (Android 14) the stone animations do
-not play at all. First things to check: the system "Remove animations" / animator
-duration scale and power saving (Compose tween durations follow that scale, so the
-approach would finish instantly), and the game's own reduced-motion setting.
+Verified on the emulator (Midnight 3, upper row into the empty tube below): drop 12.0
+slots, rebound 6.6 slots, headroom to the tube above 5.6 slots, so the stone strikes it.
+
+Not diagnosed: on the creator's Samsung A-series phone (Android 14) the stone animations
+did not play at all. One plausible cause is now removed: stone flights no longer follow
+the system animation scale (zero under "Remove animations" and some power saving),
+covered by SystemAnimationScaleTest. Unconfirmed until that phone runs this build. If
+it still fails, check the game's own Reduced motion setting next.
+
+Compact boards: the space above the board and between rows now scales with stone size
+(BoardGeometry) instead of a fixed 52/40 dp. Boards whose stones are at least about
+32 dp are unchanged; a 360x640 dp screen with 130% text and six five-slot tubes gets
+roughly 19 dp stones instead of 13 dp. Unit-tested only, not viewed at that size.
 
 ## Material and sound polish
 
