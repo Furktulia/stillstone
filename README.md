@@ -43,6 +43,7 @@ download is required. Sync Gradle after build-script changes.
 | [Next steps](docs/next-steps.md) | Prioritized current backlog and optional ideas |
 | [World UI](docs/world-ui.md) | Approved visual direction, rendering, assets and recent UI checks |
 | [Feel playtest](docs/feel-playtest.md) | Movement, routing, synthetic sound and phone feedback |
+| [Puzzle quality](docs/puzzle-quality.md) | Engine review, shared analyzer, tiers, E2 Infinite recipe, tier pool |
 | [Infinite mode](docs/infinite-mode.md) | Seed codes, examples, storage/export and limitations |
 | [Engine README](puzzle-engine/README.md) | Rules, solver/generator contracts and lab commands |
 | [Level workshop](docs/level-workshop.md) | Offline generation, review and pack selection |

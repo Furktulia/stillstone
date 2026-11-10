@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,7 +37,8 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
     }
     val preferences = remember { context.getSharedPreferences("mode", Context.MODE_PRIVATE) }
     var mode by rememberSaveable { mutableStateOf(preferences.getBoolean("endless", false)) }
-    var challenge by rememberSaveable { mutableStateOf(preferences.getBoolean("challenge", false)) }
+    // "challenge" is the earlier two-way preference; it only seeds the first three-way choice.
+    var recipe by rememberSaveable { mutableStateOf(preferences.getString("recipe", null) ?: if (preferences.getBoolean("challenge", false)) "C" else "B") }
     var browseWorlds by rememberSaveable { mutableStateOf(false) }
     var pickerWorld by rememberSaveable { mutableStateOf<String?>(null) }
     var browserSettings by rememberSaveable { mutableStateOf(false) }
@@ -98,12 +100,12 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                                     game::hint, game::cancelHint, game::chooseLevel, game::settings,
                                     game::dismissRecovery, game::recover),
                                     browse = { openBrowser(null) },
-                                    nextPuzzle = { if (!state.busy) endless.next(challenge) },
+                                    nextPuzzle = { if (!state.busy) endless.next(recipe.first()) },
                                     extraAction = { menu = true })
                             }
                         } else Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                             if (state.busy) CircularProgressIndicator()
-                            else NightButton("Try another puzzle", onClick = { endless.next(challenge) })
+                            else NightButton("Try another puzzle", onClick = { endless.next(recipe.first()) })
                         }
                     }
                 }
@@ -130,12 +132,19 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                     .setPrimaryClip(ClipData.newPlainText("Puzzle code", state.code))
                 message = "Code copied."
             }) { Text(state.code.ifEmpty { "Preparing puzzle…" } + " · Copy") }
-            Text("Challenge uses less spare space. Difficulty is still experimental.")
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Challenge")
-                Switch(challenge, { challenge = it; preferences.edit().putBoolean("challenge", it).apply() }, modifier = Modifier.semantics { contentDescription = "Use challenge puzzles" })
+            // Wraps instead of clipping a label on narrow dialogs or with large text.
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((letter, title) in listOf("R" to "Relaxed", "B" to "Balanced", "C" to "Challenge")) {
+                    FilterChip(recipe == letter, { recipe = letter; preferences.edit().putString("recipe", letter).apply() },
+                        label = { Text(title, maxLines = 1) }, modifier = Modifier.testTag("recipe_$letter"))
+                }
             }
-            TextButton(onClick = { endless.next(challenge); menu = false }, enabled = !state.busy) { Text("Skip / new puzzle") }
+            Text(when (recipe) {
+                "R" -> "A simple approach nearly always works."
+                "C" -> "Tempting moves can lose the puzzle. Expect to use Undo."
+                else -> "Some choices matter, and a few can be dead ends."
+            } + " Applies from the next new puzzle.", style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = { endless.next(recipe.first()); menu = false }, enabled = !state.busy) { Text("Skip / new puzzle") }
             TextButton(onClick = { enter = true; menu = false }) { Text("Enter puzzle code") }
             TextButton(onClick = { bookmark = true; menu = false }, enabled = state.game != null) { Text("Save example") }
             TextButton(onClick = { scope.launch { saved = withContext(Dispatchers.IO) { endless.examples().lines().filter { it.isNotBlank() } } }; menu = false }) { Text("Saved examples") }
@@ -155,8 +164,8 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
             } }, confirmButton = { TextButton(onClick = { saved = null }) { Text("Done") } })
     }
     if (enter) AlertDialog(onDismissRequest = { enter = false }, title = { Text("Replay a code") },
-        text = { OutlinedTextField(code, { code = it }, label = { Text("E1-B-seed or E1-C-seed") }) },
-        confirmButton = { TextButton(onClick = { endless.next(challenge, code); enter = false }) { Text("Load") } },
+        text = { OutlinedTextField(code, { code = it }, label = { Text("For example E2-B-1") }) },
+        confirmButton = { TextButton(onClick = { endless.next(recipe.first(), code); enter = false }) { Text("Load") } },
         dismissButton = { TextButton(onClick = { enter = false }) { Text("Cancel") } })
     if (bookmark) AlertDialog(onDismissRequest = { bookmark = false }, title = { Text("Save this example") },
         text = { Column { Text("Hard can be good. Describe what worked or felt wrong."); OutlinedTextField(note, { note = it }, label = { Text("Optional note") }) } },

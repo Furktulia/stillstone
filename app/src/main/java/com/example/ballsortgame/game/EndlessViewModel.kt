@@ -71,12 +71,14 @@ class EndlessViewModel(context: Context) : ViewModel() {
             request?.cancel(); prefetch?.cancel()
         } else if (state.value.game == null && !state.value.busy) next(false) else prime()
     }
-    private suspend fun construct(challenge: Boolean, entered: String? = null): JSONObject = withContext(Dispatchers.Default) {
+    /** Recipe letter of a code: R relaxed, B balanced, C challenge. Unknown codes fall back to balanced. */
+    private fun recipeOf(code: String): Char = code.split("-").getOrNull(1)?.singleOrNull()?.takeIf { it in "RBC" } ?: 'B'
+    private suspend fun construct(recipe: Char, entered: String? = null): JSONObject = withContext(Dispatchers.Default) {
         var chosen: Pair<String, PackLevel>? = null
         repeat(if (entered == null) 12 else 1) {
             ensureActive()
             if (chosen == null) {
-                val code = entered?.trim()?.uppercase() ?: SeededPuzzle.code(java.security.SecureRandom().nextLong().ushr(16), challenge)
+                val code = entered?.trim()?.uppercase() ?: SeededPuzzle.code(java.security.SecureRandom().nextLong().ushr(16), recipe)
                 val context = currentCoroutineContext()
                 try { chosen = code to SeededPuzzle.create(code, cancelled = { !context.isActive }) }
                 catch (e: IllegalArgumentException) { if (entered != null) throw e }
@@ -95,7 +97,7 @@ class EndlessViewModel(context: Context) : ViewModel() {
             repeat(2) {
                 val full = synchronized(lock) { (current.optJSONArray("queue")?.length() ?: 0) >= 2 }
                 if (full) return@launch
-                val candidate = construct(current.getString("code").contains("-C-"))
+                val candidate = construct(recipeOf(current.getString("code")))
                 withContext(Dispatchers.IO) {
                     synchronized(lock) {
                         if (record === current) {
@@ -109,7 +111,9 @@ class EndlessViewModel(context: Context) : ViewModel() {
             catch (_: Exception) { mutable.value = mutable.value.copy(error = "Next puzzle preparation paused. Use new puzzle to retry.") }
         }
     }
-    fun next(challenge: Boolean, entered: String? = null) {
+    fun next(challenge: Boolean, entered: String? = null) = next(if (challenge) 'C' else 'B', entered)
+    /** New puzzles always use the current quality-screened recipe; an entered code may be older. */
+    fun next(recipe: Char, entered: String? = null) {
         if (request?.isCompleted == false) return
         prefetch?.cancel()
         request?.cancel()
@@ -118,14 +122,14 @@ class EndlessViewModel(context: Context) : ViewModel() {
             try {
                 val queued = synchronized(lock) {
                     val queue = record?.optJSONArray("queue")
-                    if (entered == null && queue != null && queue.length() > 0 && queue.getJSONObject(0).getString("code").contains("-C-") == challenge) {
+                    if (entered == null && queue != null && queue.length() > 0 && queue.getJSONObject(0).getString("code").startsWith("E2-$recipe-")) {
                         val first = queue.getJSONObject(0)
                         val remaining = org.json.JSONArray()
                         for (i in 1 until queue.length()) remaining.put(queue.getJSONObject(i))
                         first.put("queue", remaining)
                     } else null
                 }
-                val value = queued ?: construct(challenge, entered)
+                val value = queued ?: construct(recipe, entered)
                 val settings = state.value.game?.snapshotProgress()
                 if (settings != null) {
                     val id = LevelPackCodec.decode(value.getString("pack")).levels.single().id

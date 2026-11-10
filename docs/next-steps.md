@@ -51,6 +51,12 @@ roughly 19 dp stones instead of 13 dp. Unit-tested only, not viewed at that size
 
 ## Puzzle quality and progression
 
+Done 2026-11-10 (see puzzle-quality.md): shared exact PuzzleAnalyzer with provisional
+tiers, the quality-screened E2 Infinite recipe with Relaxed / Balanced / Challenge, and
+the tier-pool authoring command. Next step is the creator playing and rating Infinite
+puzzles of each tier (especially Balanced, which has no human-rated example) and
+candidates from a tier pool, then adding levels to the worlds from those ratings.
+
 Already present: shared variable-capacity rules/solver, certified generation,
 desktop workshop and decision-based challenge screening; three curated playtest
 worlds with 32 levels; seeded offline Infinite with bookmarks and export.

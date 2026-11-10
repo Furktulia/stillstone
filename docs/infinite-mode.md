@@ -6,6 +6,11 @@ current board, moves, undo history and two prepared puzzles are stored on device
 Everything works offline; there is no service, account or network dependency.
 Generation runs on a worker and pauses when leaving Infinite or backgrounding the app.
 
+**2026-11-10:** new puzzles use the E2 recipe described in puzzle-quality.md. Choose
+Relaxed, Balanced or Challenge under ⋯; codes look like `E2-B-…`. Every E2 puzzle is
+analyzed exactly before it is offered and stores a shortest solution. E1 codes still
+replay. Statements below about E1 recipes and missing quality filters describe E1 only.
+
 ## On a flight
 
 - Use **Options → Skip / new puzzle** at any time, or Next after solving.

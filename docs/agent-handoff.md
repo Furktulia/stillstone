@@ -203,6 +203,10 @@ to assess decisions/temptations/counter-greedy choices. Unknowns are not proven 
 This does not prove a capacity-dependent skill ceiling or human difficulty rating.
 See challenge-selection.md and difficulty-investigation.md before changing selection.
 
+UPDATE 2026-11-10: read puzzle-quality.md first. New Infinite puzzles use the E2 recipe
+(exactly analyzed, tiered Relaxed / Balanced / Challenge, shortest solutions); the E1
+description below now applies only to replaying old codes and saved examples.
+
 Infinite is an offline playtest instrument for flights: reproducible codes,
 Good/Needs work bookmarks with notes and later export. Hard can be good.
 E1-B/E1-C seed meanings use deterministic work limits and capacities 3–5.

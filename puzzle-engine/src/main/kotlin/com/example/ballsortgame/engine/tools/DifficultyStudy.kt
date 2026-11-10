@@ -20,7 +20,8 @@ internal class DecisionGraph private constructor(
     }
 
     companion object {
-        fun explore(initial: Board, maxStates: Int = 100_000, maxMillis: Long = 5_000): DecisionGraph? {
+        fun explore(initial: Board, maxStates: Int = 100_000, maxMillis: Long = 5_000,
+            cancelled: () -> Boolean = { false }): DecisionGraph? {
             require(maxStates > 0 && maxMillis >= 0)
             val started = System.nanoTime()
             val boards = arrayListOf(initial)
@@ -28,7 +29,7 @@ internal class DecisionGraph private constructor(
             val edges = ArrayList<List<Int>>()
             var cursor = 0
             while (cursor < boards.size) {
-                if ((System.nanoTime() - started) / 1_000_000 >= maxMillis || Thread.currentThread().isInterrupted) return null
+                if ((System.nanoTime() - started) / 1_000_000 >= maxMillis || Thread.currentThread().isInterrupted || cancelled()) return null
                 val board = boards[cursor++]
                 val nextIndices = ArrayList<Int>()
                 if (!board.isSolved) for ((_, next) in effectiveChoices(board)) {

@@ -98,6 +98,20 @@ internal fun assessChallenge(level: PackLevel, budget: ChallengeBudget = Challen
     check(shortest != null) { "Complete graph rejected a replay-certified level: ${level.id}" }
     if (level.shortestProven) check(shortest == level.solution.size) { "Shortest-path claim failed for ${level.id}" }
 
+    val structure = decisionStructure(graph)
+    return ChallengeAssessment(
+        true, graph.boards.size, shortest, structure.minDecisions, structure.minTemptations, structure.maxTemptations,
+        structure.minCounterGreedy, structure.openingTemptingLosses, budget.trials, successes,
+    )
+}
+
+internal class DecisionStructure(
+    val minDecisions: Int, val minTemptations: Int, val maxTemptations: Int,
+    val minCounterGreedy: Int, val openingTemptingLosses: Int,
+)
+
+/** Requires a solvable root at index 0. Minima are taken over EVERY shortest route. */
+internal fun decisionStructure(graph: DecisionGraph): DecisionStructure {
     // Shortest-path edges strictly decrease distance. Dynamic programming takes MIN over
     // all shortest routes; a convenient single certificate cannot hide an easier route.
     val minDecisions = IntArray(graph.boards.size)
@@ -127,10 +141,7 @@ internal fun assessChallenge(level: PackLevel, budget: ChallengeBudget = Challen
         minCounter[index] = counter + children.minOf { minCounter[it] }
         if (index == 0) rootTemptingLosses = temptingLosses
     }
-    return ChallengeAssessment(
-        true, graph.boards.size, shortest, minDecisions[0], minTemptations[0], maxTemptations[0],
-        minCounter[0], rootTemptingLosses, budget.trials, successes,
-    )
+    return DecisionStructure(minDecisions[0], minTemptations[0], maxTemptations[0], minCounter[0], rootTemptingLosses)
 }
 
 internal val challengeOrder: Comparator<Pair<PackLevel, ChallengeAssessment>> =
