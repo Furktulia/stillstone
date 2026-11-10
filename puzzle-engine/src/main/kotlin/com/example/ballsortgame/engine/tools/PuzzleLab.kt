@@ -30,6 +30,9 @@ fun main(args: Array<String>) {
                                  --output build/puzzle-lab/difficulty-study
                 refine-finales --count 48 --seed 40000 --output build/puzzle-lab/refined-finales
                 review-challenges --output build/puzzle-lab/challenge-review.csv --policy-trials 100
+                tier-survey --count 200 --seed 70000 --analysis-states 20000 --policy-trials 40 --output build/puzzle-lab/tiers
+                tier-pool --count 6 --seed 80000 --attempts 4000 --output build/puzzle-lab/tier-pool
+                seed-benchmark --count 100 --seed 1
                 Options are name/value pairs. Generation emits JSON; --output writes one file per puzzle.
                 Strategies: shuffle (solve before accepting) or reverse (construction certificate).
                 Benchmark compares both candidate methods with exact and weighted search.
@@ -37,7 +40,7 @@ fun main(args: Array<String>) {
             """.trimIndent())
             return
         }
-        require(command in setOf("generate", "benchmark", "corpus", "survey", "workshop", "pack", "verify-pack", "difficulty-study", "review-challenges", "refine-finales", "replay-seed")) { "Unknown command: $command" }
+        require(command in setOf("generate", "benchmark", "corpus", "survey", "workshop", "pack", "verify-pack", "difficulty-study", "review-challenges", "refine-finales", "replay-seed", "tier-survey", "tier-pool", "seed-benchmark")) { "Unknown command: $command" }
         val options = parseOptions(args.drop(1))
         when (command) {
             "replay-seed" -> {
@@ -61,6 +64,9 @@ fun main(args: Array<String>) {
             "difficulty-study" -> runDifficultyStudy(options)
             "review-challenges" -> runChallengeReview(options)
             "refine-finales" -> runFinaleRefinement(options)
+            "tier-survey" -> runTierSurvey(options)
+            "tier-pool" -> runTierPool(options)
+            "seed-benchmark" -> runSeedBenchmark(options)
         }
     } catch (error: IllegalArgumentException) {
         System.err.println("Puzzle Lab: ${error.message}")

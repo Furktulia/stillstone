@@ -122,53 +122,89 @@ internal fun WorldEntrance(id: String, modifier: Modifier = Modifier, pressed: B
     }
 }
 
-internal data class WorldLight(val bounds: androidx.compose.ui.geometry.Rect, val color: Color)
+/** [cloud] surrounds a world entrance with drifting-looking coloured fog; plain lights only glow. */
+internal data class WorldLight(val bounds: androidx.compose.ui.geometry.Rect, val color: Color, val cloud: Boolean = false)
+
+/**
+ * Soft radial light drawn with a dithered native paint. Plain 8-bit gradients at these
+ * low alphas form visible contour rings; where several overlapped and moved against
+ * each other while scrolling, the rings crossed into a net-like pattern.
+ */
+private class SoftLight(color: Color, stops: FloatArray, alphas: FloatArray) {
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.DITHER_FLAG).apply {
+        shader = android.graphics.RadialGradient(0f, 0f, 1f,
+            IntArray(stops.size) { color.copy(alpha = alphas[it]).toArgb() }, stops, android.graphics.Shader.TileMode.CLAMP)
+    }
+    fun draw(canvas: android.graphics.Canvas, x: Float, y: Float, radiusX: Float, radiusY: Float = radiusX,
+        strength: Float = 1f, erase: Boolean = false) {
+        if (radiusX <= 0f || radiusY <= 0f) return
+        paint.alpha = (strength.coerceIn(0f, 1f) * 255).roundToInt()
+        paint.blendMode = if (erase) android.graphics.BlendMode.DST_OUT else android.graphics.BlendMode.SRC_OVER
+        canvas.save()
+        canvas.translate(x, y)
+        canvas.scale(radiusX, radiusY)
+        canvas.drawCircle(0f, 0f, 1f, paint)
+        canvas.restore()
+    }
+}
+
+/** Irregular fog lobes around an entrance: angle (turns), distance and size relative to its width. */
+private val CloudLobes = listOf(
+    floatArrayOf(.03f, .56f, .46f, .23f), floatArrayOf(.15f, .64f, .36f, .25f),
+    floatArrayOf(.27f, .54f, .50f, .21f), floatArrayOf(.41f, .66f, .38f, .24f),
+    floatArrayOf(.53f, .58f, .48f, .22f), floatArrayOf(.66f, .66f, .36f, .26f),
+    floatArrayOf(.78f, .52f, .52f, .21f), floatArrayOf(.90f, .64f, .40f, .24f),
+)
 
 @Composable
 internal fun WorldBrowserBackdrop(modifier: Modifier = Modifier, lights: List<WorldLight> = emptyList(),
     scrollOffset: () -> Float = { 0f }) {
     val mist = rememberArtwork("browser-mist-v1")
+    val clearing = remember { SoftLight(Color.Black, floatArrayOf(0f, 1f), floatArrayOf(.40f, 0f)) }
+    val glows = remember { HashMap<Color, SoftLight>() }
+    val clouds = remember { HashMap<Color, SoftLight>() }
     Canvas(modifier) {
         drawRect(Brush.verticalGradient(listOf(Color(0xFF182633), Color(0xFF26313C), Color(0xFF14242C))))
+        val canvas = drawContext.canvas.nativeCanvas
         if (mist != null) {
             // The isolated mist layer lets local masks thin fog without erasing the base scene.
             drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
             // Scroll-driven only: no idle animation loop, and reduced motion supplies zero.
-            val travel = scrollOffset()
-            val phase = travel / (size.height.coerceAtLeast(1f) * .8f)
+            // The painted mist itself drifts; no synthetic layers slide across it.
+            val phase = scrollOffset() / (size.height.coerceAtLeast(1f) * .8f)
             val overscan = 24.dp.toPx()
             val drift = kotlin.math.sin(phase) * overscan * .65f
             drawImage(mist,
                 dstOffset = IntOffset(-overscan.roundToInt(), (-overscan + drift).roundToInt()),
                 dstSize = IntSize((size.width + overscan * 2).roundToInt(),
                     (size.height + overscan * 2).roundToInt()), alpha = .92f)
-            // Broad translucent fog banks slide at a different rate to create gentle depth.
-            for (i in 0..2) {
-                val center = Offset(
-                    size.width * (.2f + i * .34f) + kotlin.math.sin(phase * .7f + i) * 28.dp.toPx(),
-                    size.height * (.22f + i * .30f) + kotlin.math.sin(phase + i * 1.6f) * 58.dp.toPx())
-                val radius = size.width * .82f
-                drawCircle(Brush.radialGradient(listOf(Color(0xFFAFB7DC).copy(alpha = .13f),
-                    Color(0xFF8F9DC4).copy(alpha = .06f), Color.Transparent), center, radius),
-                    radius, center)
-            }
             lights.forEach { light ->
-                val radius = light.bounds.width * .76f
-                if (radius > 0f) {
-                    drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = .40f), Color.Transparent),
-                        light.bounds.center, radius), radius, light.bounds.center, blendMode = BlendMode.DstOut)
-                }
+                clearing.draw(canvas, light.bounds.center.x, light.bounds.center.y, light.bounds.width * .76f, erase = true)
             }
             drawContext.canvas.restore()
         }
         lights.forEach { light ->
-            val radius = light.bounds.width * .80f
-            if (radius > 0f) drawCircle(Brush.radialGradient(
-                0f to light.color.copy(alpha = .56f),
-                .48f to light.color.copy(alpha = .40f),
-                .78f to light.color.copy(alpha = .13f),
-                1f to Color.Transparent,
-                center = light.bounds.center, radius = radius), radius, light.bounds.center)
+            val center = light.bounds.center
+            val width = light.bounds.width
+            if (width <= 0f) return@forEach
+            if (light.cloud) {
+                // A bank of fog lit from inside by the world's colour, moving with its entrance.
+                val lobe = clouds.getOrPut(light.color) {
+                    SoftLight(lerp(light.color, Color.White, .12f), floatArrayOf(0f, .45f, 1f), floatArrayOf(.38f, .20f, 0f))
+                }
+                CloudLobes.forEach { (turn, distance, radiusX, radiusY) ->
+                    val angle = turn * 2 * Math.PI.toFloat()
+                    lobe.draw(canvas,
+                        center.x + kotlin.math.cos(angle) * width * distance,
+                        center.y + kotlin.math.sin(angle) * light.bounds.height * distance,
+                        width * radiusX, width * radiusY)
+                }
+            }
+            val glow = glows.getOrPut(light.color) {
+                SoftLight(light.color, floatArrayOf(0f, .48f, .78f, 1f), floatArrayOf(.70f, .52f, .18f, 0f))
+            }
+            glow.draw(canvas, center.x, center.y, width * if (light.cloud) .86f else .80f,
+                strength = if (light.cloud) 1f else .8f)
         }
         drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .10f), Color.Transparent, Color.Black.copy(alpha = .15f))))
     }

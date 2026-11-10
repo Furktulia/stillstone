@@ -177,7 +177,7 @@ private fun GameControls(state: GameUiState, actions: GameActions, restart: () -
     }
     @Composable fun Hint(modifier: Modifier) {
         NightButton(if (state.thinking) "Cancel hint" else "Hint", modifier.testTag("hint"),
-            enabled = !state.board.isSolved && state.transfer == null, symbol = NightSymbol.HINT,
+            enabled = !state.board.isSolved, symbol = NightSymbol.HINT,
             onClick = if (state.thinking) actions.cancelHint else actions.hint)
     }
     if (vertical) {

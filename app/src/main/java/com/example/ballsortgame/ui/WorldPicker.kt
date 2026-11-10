@@ -172,7 +172,7 @@ private fun WorldEntry(id: String, name: String, detail: String, modifier: Modif
             "endless" -> Color(0xFFD0B2FF)
             else -> Color(0xFFD69BFA)
         }
-        val light = WorldLight(Rect(coordinates.positionInRoot(), coordinates.size.toSize()), color)
+        val light = WorldLight(Rect(coordinates.positionInRoot(), coordinates.size.toSize()), color, cloud = true)
         if (lights[id] != light) lights[id] = light
     }.clickable(interactionSource = source, indication = null, onClick = open),
         contentAlignment = Alignment.Center) {
