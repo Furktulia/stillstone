@@ -1,0 +1,31 @@
+# Local IDE state, caches, generated output and temporary studies
+/.idea/
+/.kotlin/
+/tmp/
+**/build/
+*.log
+*.hprof
+.captures/
+
+# Local credentials and signing files
+.env
+.env.*
+*.jks
+*.keystore
+key.properties
+
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
