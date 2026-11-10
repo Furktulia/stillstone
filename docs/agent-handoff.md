@@ -143,13 +143,16 @@ Do not return to serial ball-by-ball travel, ignored taps or accelerated queues.
 
 ## 5. Immediate known problems and desired physics
 
-Highest next technical priority, once the creator is happy with UI:
-1. Rebounding balls can pass through a tube directly above. The creator wants
-   an actual convincing contact/rebound, not tunneling or an arbitrary tiny bounce.
-2. A second incoming group in the same tube can cancel the first group's settling.
-   Ongoing motion should survive and respond continuously to new contact.
+Items 1 and 2 below were addressed by ui/SettlingColumns.kt (see next-steps.md) and
+need the creator's phone review; item 3 is open.
+1. Rebounding balls could pass through a tube directly above.
+2. A second incoming group in the same tube cancelled the first group's settling.
 3. A compact 360×640 dp layout with 130% text makes five-slot gameplay very small;
    latest button-label fix avoids wrapping but does not solve this board-layout limit.
+
+The world browser's three synthetic sliding fog banks were removed after the creator
+saw a net-like pattern while scrolling; lights are now dithered native gradients and
+each world entrance has a coloured fog cloud (WorldArt.kt). Needs phone review.
 
 Current motion is authored animation, NOT a complete physical simulation.
 Rebound is based on the full continuous descent, not only the drop below the rim;

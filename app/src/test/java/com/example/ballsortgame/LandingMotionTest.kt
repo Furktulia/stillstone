@@ -19,11 +19,6 @@ class LandingMotionTest {
         val deep = LandingMotion.reboundHeight(slot * 4, slot, 1)
         assertTrue(deep > shallow * 2)
         assertTrue(deep >= slot * 0.5f)
-        assertEquals(0f, LandingMotion.rebound(LandingMotion.contact, deep), 0.00001f)
-        val afterOneFrame = LandingMotion.contact + (1 - LandingMotion.contact) * 16f / LandingMotion.settlingMillis(deep, slot)
-        assertTrue(LandingMotion.rebound(afterOneFrame, deep) > deep * 0.07f)
-        assertEquals(deep, LandingMotion.rebound(LandingMotion.contact + (1 - LandingMotion.contact) / 1.4f / 2, deep), 0.0001f)
-        assertEquals(0f, LandingMotion.rebound(1f, deep), 0.00001f)
         assertTrue(LandingMotion.reboundHeight(slot * 4, slot, 4) < deep)
     }
     @Test fun destinationOccupancyChangesTheMeasuredFallAndRebound() {

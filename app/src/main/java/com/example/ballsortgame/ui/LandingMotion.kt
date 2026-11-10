@@ -15,12 +15,4 @@ internal object LandingMotion {
     }
     fun reboundHeight(dropPixels: Float, slot: Float, balls: Int): Float =
         (dropPixels * 0.32f).coerceIn(slot * 0.12f, slot * 3f) / sqrt(1f + 0.10f * (balls - 1).coerceAtLeast(0))
-    fun rebound(progress: Float, height: Float): Float {
-        val t = ((progress - contact) / (1 - contact)).coerceIn(0f, 1f)
-        val firstShare = 1f / 1.4f
-        val local = if (t <= firstShare) t / firstShare else (t - firstShare) / (1 - firstShare)
-        val amplitude = if (t <= firstShare) height else height * 0.16f
-        return 4 * amplitude * local * (1 - local) // Two ballistic hops, no eased-in delay.
-    }
-    fun settlingMillis(height: Float, slot: Float) = (550 * sqrt(height / slot)).toInt().coerceIn(200, 1200)
 }

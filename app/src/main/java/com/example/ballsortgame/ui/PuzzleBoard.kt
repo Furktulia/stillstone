@@ -4,7 +4,6 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -35,8 +34,11 @@ val PieceNames = listOf("coral", "mint", "gold", "blue", "lilac")
 private class GroupFlight {
     val progress = Animatable(0f)
     var started by mutableStateOf(false)
+    var landed by mutableStateOf(false)
+    /** Height above rest when the group left a tube that was still settling. */
+    var lift = 0f
     val phase get() = when {
-        progress.value >= LandingMotion.contact -> FlightPhase.LANDED
+        landed -> FlightPhase.LANDED
         started -> FlightPhase.FLYING
         else -> FlightPhase.WAITING
     }
@@ -71,10 +73,29 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
         }
         val drops = routes.map { it?.fallHeight ?: 0f }
         val releaseFractions = routes.map { it?.releaseFraction ?: 0f }
-        val rebounds = groups.mapIndexed { n, group ->
-            minOf(LandingMotion.reboundHeight(drops[n], layout.first().slot, group.count),
-                reboundClearance(layout, group.move.destination,
-                    group.before.tubes[group.move.destination].balls.size + group.count - 1, density))
+        // Standing stones keep their own motion for as long as they stay in a tube, so
+        // settling outlives the group that caused it and reacts to later arrivals.
+        val settling = remember(layout) {
+            SettlingColumns(layout.size, layout.first().slot) { tube, slot -> reboundClearance(layout, tube, slot, density) }
+        }
+        var settlingFrame by remember { mutableIntStateOf(0) }
+        var settlingRunning by remember(settling) { mutableStateOf(false) }
+        var settledEpoch by remember { mutableIntStateOf(0) }
+        val stationary = stationaryPieces(frames, state.board)
+        stationary.forEachIndexed { tube, stones -> settling.sync(tube, stones.size) }
+        LaunchedEffect(settling, settlingRunning) {
+            if (!settlingRunning) return@LaunchedEffect
+            var last = withFrameNanos { it }
+            while (settling.awake) {
+                val now = withFrameNanos { it }
+                val moving = settling.awakeCount
+                settling.step((now - last) / 1_000_000_000f)
+                last = now
+                settlingFrame++
+                if (settling.awakeCount != moving) settledEpoch++ // A tube came to rest: its group can retire.
+            }
+            settlingRunning = false
+            settledEpoch++
         }
         groups.forEachIndexed { index, group ->
             key(group.id) {
@@ -83,24 +104,47 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                 val currentRoutes by rememberUpdatedState(routes[index])
                 LaunchedEffect(group.id, ready) {
                     if (ready && !flight.started) {
+                        val route = currentRoutes
+                        val source = group.move.source
+                        flight.lift = settling.offset(source, settling.size(source) - group.count)
                         flight.started = true
-                        if (currentRoutes != null) {
+                        if (route != null) {
                             val slot = layout.first().slot
-                            val longest = currentRoutes!!.length / slot
+                            val longest = route.length / slot
                             val approachMs = (580 + longest * releaseFractions[index] * 12).toInt().coerceIn(600, 900)
                             val fallMs = (135 * kotlin.math.sqrt(drops[index] / slot)).toInt().coerceIn(120, 520)
                             flight.progress.animateTo(LandingMotion.release, tween(approachMs, easing = FastOutSlowInEasing))
-                            flight.progress.animateTo(LandingMotion.contact, tween(fallMs, easing = LinearEasing))
+                            // The fall is stepped by hand so that contact happens wherever the
+                            // destination's top stone actually is, even while it is still bouncing.
+                            val destination = group.move.destination
+                            val release = releaseFractions[index]
+                            var elapsed = 0f
+                            var last = withFrameNanos { it }
+                            var height = 0f
+                            while (true) {
+                                val now = withFrameNanos { it }
+                                elapsed += (now - last) / 1_000_000f
+                                last = now
+                                val progress = LandingMotion.release +
+                                    (LandingMotion.contact - LandingMotion.release) * (elapsed / fallMs).coerceAtMost(1f)
+                                flight.progress.snapTo(progress)
+                                height = route.length * (1 - LandingMotion.distance(progress, release))
+                                if (progress >= LandingMotion.contact || height <= settling.topOffset(destination)) break
+                            }
+                            val rebound = LandingMotion.reboundHeight(drops[index], slot, group.count)
+                            settling.land(destination, group.count, height, SettlingColumns.impactSpeed(rebound, slot))
+                            settlingRunning = true
+                            flight.landed = true
                             impactCallback(LandingImpact(group.count, drops[index] / slot))
-                            flight.progress.animateTo(1f, tween(LandingMotion.settlingMillis(rebounds[index], slot), easing = LinearEasing))
-                        } else flight.progress.snapTo(1f)
+                        } else flight.landed = true
                     }
                 }
             }
         }
         // Retire only the completed prefix: later independent moves may finish first.
         val head = groups.firstOrNull()
-        val headDone = flights.firstOrNull()?.progress?.value == 1f
+        val headDone = settledEpoch >= 0 && head != null && flights.first().landed &&
+            !settling.awake(head.move.destination)
         LaunchedEffect(head?.id, headDone) {
             if (head != null && headDone) onTransferFinished(head.id)
         }
@@ -110,7 +154,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
         Canvas(Modifier.fillMaxSize().testTag("board_motion").semantics {
             stateDescription = "${frames.count { it.phase == FlightPhase.FLYING }} moving groups"
         }) {
-            val stationary = stationaryPieces(frames, state.board)
+            settlingFrame // Redraw while stones are settling.
             state.board.tubes.forEachIndexed { index, tube ->
                 val geometry = layout[index]
                 val left = geometry.centerX - geometry.width / 2
@@ -135,14 +179,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
 
                 stationary[index].forEachIndexed { pieceIndex, color ->
                     val lifted = groups.isEmpty() && state.selected == index && pieceIndex >= tube.balls.size - tube.topRun
-                    val settlingGroup = frames.indices.lastOrNull { n ->
-                        val group = groups[n]
-                        frames[n].phase == FlightPhase.LANDED && group.move.destination == index &&
-                            pieceIndex in group.before.tubes[index].balls.size until group.before.tubes[index].balls.size + group.count &&
-                            frames.drop(n + 1).none { it.phase != FlightPhase.WAITING &&
-                                (it.group.move.source == index || it.group.move.destination == index) }
-                    }
-                    val bounce = settlingGroup?.let { LandingMotion.rebound(flights[it].progress.value, rebounds[it]) } ?: 0f
+                    val bounce = settling.offset(index, pieceIndex)
                     drawStone(
                         Offset(geometry.centerX, geometry.pieceY(pieceIndex, density) - bounce - if (lifted) 7f * density * selectionLift else 0f),
                         geometry.slot, color, state.colorLabels, numberPaint, look.light,
@@ -157,9 +194,11 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
             groups.forEachIndexed { index, group ->
                 if (frames[index].phase == FlightPhase.FLYING) {
                     val color = requireNotNull(group.before.tubes[group.move.source].top)
-                    val t = LandingMotion.distance(flights[index].progress.value, releaseFractions[index])
+                    val progress = flights[index].progress.value
+                    val t = LandingMotion.distance(progress, releaseFractions[index])
+                    val lift = flights[index].lift * (1 - (progress / (LandingMotion.release * 0.4f)).coerceIn(0f, 1f))
                     routes[index]?.at(t)?.forEach { point ->
-                        drawStone(Offset(point.x, point.y), layout[group.move.source].slot, color, state.colorLabels, numberPaint, look.light)
+                        drawStone(Offset(point.x, point.y - lift), layout[group.move.source].slot, color, state.colorLabels, numberPaint, look.light)
                     }
                 }
             }

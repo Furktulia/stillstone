@@ -4,19 +4,21 @@ This is the current queue; product-plan.md is the original planning snapshot,
 not a record of everything still missing. Optional ideas below are not promises
 to include them in the first release.
 
-## Next: continuous settling and collisions
+## Continuous settling: implemented, awaiting phone review
 
-Phone feedback:
-- A rebound can pass through a tube directly above it. It should contact the
-  obstacle and rebound/settle naturally rather than tunnel through it.
-- Sending another group into the same tube can cancel the first group's settling.
-  Preserve each group's ongoing motion and handle the new contact continuously.
+ui/SettlingColumns.kt gives every standing stone its own vertical displacement and
+velocity per tube. Stones bounce off the floor, each other and a tube directly above
+(or the screen edge). A landing group enters with a speed derived from the existing
+drop-based rebound height, meets the destination's top stone wherever it currently is,
+and the earlier group keeps moving. Departing stones leave the rest in motion; undo,
+restart and instant motion show a tube at rest. Approach, routing, taps and the logical
+board are unchanged. A group retires once its destination tube is at rest.
 
-The current implementation is authored animation, not a general physics simulation.
-Keep puzzle moves atomic and separate from visual motion. Build a persistent settling
-model before layering in more bounce interactions; verify both examples, stacked
-incoming groups, undo during motion and cancellation on changing puzzles.
-Do not sacrifice responsive queued taps or obstacle-aware transfer routing.
+Needs the creator's phone judgement: rebound height and pace, how overhead contact
+reads, and whether stacked arrivals look natural. Constants are in SettlingColumns.
+Still open: collisions between groups in flight, per-contact sound, and a stone leaving
+a still-moving tube starts its flight with a short blended lift rather than true momentum.
+The compact 360x640 dp / 130% text five-slot layout limit is also unchanged.
 
 ## Material and sound polish
 
