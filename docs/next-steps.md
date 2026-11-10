@@ -20,6 +20,15 @@ Still open: collisions between groups in flight, per-contact sound, and a stone 
 a still-moving tube starts its flight with a short blended lift rather than true momentum.
 The compact 360x640 dp / 130% text five-slot layout limit is also unchanged.
 
+Creator feedback (emulator): the motion is liked. Rebound after long falls was too
+small to reach an overhead tube, so LandingMotion.reboundHeight now returns up to 55%
+of drops beyond about five slots (cap seven slots). Needs their review.
+
+Deferred, not diagnosed: on a Samsung Galaxy A51s (Android 14) the stone animations do
+not play at all. First things to check: the system "Remove animations" / animator
+duration scale and power saving (Compose tween durations follow that scale, so the
+approach would finish instantly), and the game's own reduced-motion setting.
+
 ## Material and sound polish
 
 - Finish the nearly smooth stone/bone feel: restrained reflected lighting and subtle
