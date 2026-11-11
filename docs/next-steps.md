@@ -4,6 +4,45 @@ This is the current queue; product-plan.md is the original planning snapshot,
 not a record of everything still missing. Optional ideas below are not promises
 to include them in the first release.
 
+## Creator feedback 2026-11-11 (after playing campaign and Infinite)
+
+- **Tier labels match their experience.** Direction: most campaign levels should be RELAXED.
+  Less experienced players find even BALANCED hard until they have played for an hour or so.
+  Harder levels are the exception, placed late or as optional branches, never the default.
+- **World browser:** the entrance pictures "do not belong". Exploration in the working tree
+  (not yet approved): entrances at 58% of width instead of 70%, and their silhouette edge
+  dissolves into the mist (WorldArtwork.ENTRANCE_FEATHER, computed once when the art loads;
+  source images unchanged). The creator likes this "much more" (emulator); phone review open.
+- **Sound and haptics reported as not working.** Measured on the emulator: the impact clip
+  does play on every landing, but at about -35 dB (media volume 5/15 plus a quiet clip).
+  Sound is also skipped whenever the phone's ringer is on vibrate or silent, and haptics
+  are off by default and use the system key-press effect, which many phones disable.
+  The creator's phone was not on silent and has key-press vibration disabled (as they
+  expect most players do). Earlier builds were already "really quiet" to them.
+  Done since: clips are about 5 dB louder (ImpactSounds.LEVEL, rounded limiter) and
+  playback volume is 0.75–1.0 instead of 0.55–0.9. A fourth comparison style, River stone,
+  adds a bright clack to the Pebble body, because phone speakers reproduce little of
+  Pebble's 185 Hz. Nobody has listened to either change yet; default style is still Pebble.
+  Built 2026-11-11, unheard: SettlingColumns reports every contact above 2.5 slots/s as
+  FLOOR, STONE or OVERHEAD with its closing speed. GameFeedback plays one short voice per
+  contact (ImpactSounds.renderContact: lower tock, bright clack, lighter high tap, all derived
+  from the chosen style), volume from speed (contactVolume), at most one voice per kind every
+  35 ms, playback rate varied by ±4%. The old whole-landing clip now plays only with Reduced
+  motion and in the sound comparison, which therefore does not preview contact voices.
+  Gentle haptics is an explicit PRIMITIVE_TICK at 0.25–0.55 strength (8 ms one-shot fallback)
+  on each landing, usage MEDIA, so it no longer depends on the touch-vibration setting; still
+  off by default, and switching it on plays one tick. VIBRATE permission added.
+  Creator verdict 2026-11-12 (phone): "the sounds and vibrations are good."
+  The ringer-mode check was the reason they heard nothing earlier: their phone is always on
+  vibrate and they listen through earphones. It is removed; game sound now follows media
+  volume and the Stone sounds switch only.
+- **Stones passing through each other in flight** (E2-B-11MK1N5UER: tube 2 to 5, then 4 to 5).
+  Cause: the later, shorter group waits directly above tube 5, which is on the earlier
+  group's path down the aisle. Assessment: physical collisions in flight are not worth it;
+  a yield rule is (a later group holds short of an earlier group's remaining route, never
+  the reverse, so nothing can deadlock, and if two groups already overlap it does nothing).
+  Not implemented; awaiting the creator's go-ahead.
+
 ## Continuous settling: implemented, awaiting phone review
 
 ui/SettlingColumns.kt gives every standing stone its own vertical displacement and

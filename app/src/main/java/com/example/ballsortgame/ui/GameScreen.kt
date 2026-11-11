@@ -55,7 +55,7 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                         Modifier.fillMaxSize().widthIn(max = 1100.dp).align(Alignment.Center),
                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                     ) {
-                        PuzzleBoard(state, tap, actions.finishTransfer, Modifier.weight(1f).fillMaxHeight(), feedback::impact)
+                        PuzzleBoard(state, tap, actions.finishTransfer, Modifier.weight(1f).fillMaxHeight(), feedback::landing, feedback::contact)
                         Column(
                             Modifier.width(240.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -75,7 +75,7 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                         GameHeader(level, worldNumber, { if (browse != null) browse() else showLevels = true }, { showSettings = true }, showBrowse, extraAction)
                         PuzzleBoard(
                             state, tap, actions.finishTransfer,
-                            Modifier.weight(1f).fillMaxWidth(), feedback::impact,
+                            Modifier.weight(1f).fillMaxWidth(), feedback::landing, feedback::contact,
                         )
                         GameStatus(state)
                         Spacer(Modifier.height(12.dp))

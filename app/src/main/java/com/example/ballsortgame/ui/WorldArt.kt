@@ -68,8 +68,57 @@ internal object WorldArtwork {
         }
         val bitmap = context.assets.open("worlds/$name.png").use { BitmapFactory.decodeStream(it, null, options) }
             ?: error("Unreadable world artwork: $name")
-        val visible = if (name.contains("-depth-") || name.startsWith("infinite-entry") || name.startsWith("stone-button")) trimBorder(bitmap) else bitmap
+        val entrance = name.contains("-depth-") || name.startsWith("infinite-entry")
+        val trimmed = if (entrance || name.startsWith("stone-button")) trimBorder(bitmap) else bitmap
+        val visible = if (entrance && ENTRANCE_FEATHER > 0f) featherEdges(trimmed, ENTRANCE_FEATHER) else trimmed
         return visible.asImageBitmap().also { cache.put(name, it) }
+    }
+
+    /** Depth of the soft edge of a world entrance, as a fraction of its width. Zero keeps the cut-out edge. */
+    const val ENTRANCE_FEATHER = 0.035f
+
+    /**
+     * Dissolve the silhouette's edge into whatever is behind it. The alpha channel is blurred
+     * and remapped so the fade happens inside the outline: the middle of the picture is
+     * untouched, and thin leaves at the rim thin out instead of ending in a hard cut.
+     */
+    private fun featherEdges(bitmap: android.graphics.Bitmap, fraction: Float): android.graphics.Bitmap {
+        val w = bitmap.width; val h = bitmap.height
+        val radius = (w * fraction).roundToInt().coerceAtLeast(1)
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+        var alpha = FloatArray(w * h) { pixels[it].ushr(24) / 255f }
+        var scratch = FloatArray(w * h)
+        repeat(2) {
+            // Separable box blur; outside the picture counts as transparent.
+            for (y in 0 until h) {
+                var sum = 0f
+                for (x in -radius until w) {
+                    val enter = x + radius
+                    if (enter < w) sum += alpha[y * w + enter]
+                    val leave = x - radius - 1
+                    if (leave >= 0) sum -= alpha[y * w + leave]
+                    if (x >= 0) scratch[y * w + x] = sum / (radius * 2 + 1)
+                }
+            }
+            for (x in 0 until w) {
+                var sum = 0f
+                for (y in -radius until h) {
+                    val enter = y + radius
+                    if (enter < h) sum += scratch[enter * w + x]
+                    val leave = y - radius - 1
+                    if (leave >= 0) sum -= scratch[leave * w + x]
+                    if (y >= 0) alpha[y * w + x] = sum / (radius * 2 + 1)
+                }
+            }
+        }
+        for (i in pixels.indices) {
+            val inside = ((alpha[i] - .5f) * 2f).coerceIn(0f, 1f)
+            val soft = inside * inside * (3 - 2 * inside)
+            val a = (pixels[i].ushr(24) * soft).roundToInt()
+            pixels[i] = (a shl 24) or (pixels[i] and 0xFFFFFF)
+        }
+        return android.graphics.Bitmap.createBitmap(pixels, w, h, android.graphics.Bitmap.Config.ARGB_8888)
     }
     private fun trimBorder(bitmap: android.graphics.Bitmap): android.graphics.Bitmap {
         val w = bitmap.width; val h = bitmap.height

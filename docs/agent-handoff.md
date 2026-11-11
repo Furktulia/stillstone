@@ -66,7 +66,7 @@ button. Subsequent cold launches restore the last campaign or Infinite game.
 
 The browser is a tall scrolling composition of irregular depth entrances, never
 rectangular image cards. Each entrance gets its own row, about 65–75% screen width
-(currently 70%), alternately left/right with moderate gaps. Dusk is not deliberately
+(70% as committed; a 58% soft-edged variant is under review, see next-steps.md), alternately left/right with moderate gaps. Dusk is not deliberately
 larger than the rest. No Worlds heading, Infinite/Endless captions or scrollbar.
 Names appear inside worlds and in accessible descriptions.
 

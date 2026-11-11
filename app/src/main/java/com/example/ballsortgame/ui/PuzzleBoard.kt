@@ -54,7 +54,7 @@ private class GroupFlight {
 }
 
 @Composable
-fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (Long) -> Unit, modifier: Modifier = Modifier, onImpact: (LandingImpact) -> Unit = {}) {
+fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (Long) -> Unit, modifier: Modifier = Modifier, onImpact: (LandingImpact) -> Unit = {}, onContact: (StoneContact) -> Unit = {}) {
     val density = LocalDensity.current.density
     val look = LocalWorldLook.current
     val groups = state.transfers
@@ -63,6 +63,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
     val flights = groups.map { runtimes.getOrPut(it.id) { GroupFlight() } }
     val frames = groups.mapIndexed { index, group -> GroupFrame(group, flights[index].phase) }
     val impactCallback by rememberUpdatedState(onImpact)
+    val contactCallback by rememberUpdatedState(onContact)
     val selectionLift by animateFloatAsState(if (state.selected != null) 1f else 0f,
         tween(if (state.reducedMotion) 0 else 150), label = "selection")
     BoxWithConstraints(modifier) {
@@ -99,6 +100,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                 val now = withFrameNanos { it }
                 val moving = settling.awakeCount
                 settling.step((now - last) / 1_000_000_000f)
+                settling.drainContacts().forEach { contactCallback(it) }
                 last = now
                 settlingFrame++
                 if (settling.awakeCount != moving) settledEpoch++ // A tube came to rest: its group can retire.

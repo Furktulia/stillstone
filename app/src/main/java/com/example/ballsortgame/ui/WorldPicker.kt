@@ -76,7 +76,7 @@ fun WorldPicker(levels: List<PlayableLevel>, state: GameUiState, onDismiss: () -
                     }
                     if (entries == null) {
                         val all = worlds.entries.toList()
-                        val badgeWidth = (pageWidth * .70f).coerceAtMost(420.dp)
+                        val badgeWidth = (pageWidth * .58f).coerceAtMost(420.dp)
                         LazyColumn(Modifier.weight(1f).fillMaxWidth().nestedScroll(fogConnection).testTag("world_list")
                             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                             .drawWithContent {
