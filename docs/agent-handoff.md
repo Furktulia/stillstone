@@ -239,6 +239,8 @@ Instrumentation once removed the real emulator save during cleanup.
 KEEP android.injected.androidTest.leaveApksInstalledAfterRun=true and use
 in-memory/isolated test stores. Never clear real player data to simplify a test.
 Install updates over the app without uninstalling.
+Debug builds use the committed app/playtest-debug.keystore (see README). Do not delete or
+regenerate it: a changed signature forces every tester to uninstall and lose their save.
 
 ## 8. Art and portability
 

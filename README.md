@@ -32,6 +32,12 @@ Debug APK: `app/build/outputs/apk/debug/app-debug.apk`.
 Do not uninstall or clear data when installing an update: player saves and
 Infinite examples are private app data.
 
+Debug builds are signed with `app/playtest-debug.keystore`, which is committed on purpose.
+Android only updates an installed app when the signature matches, so every machine must
+sign playtest builds with this same key. Builds made before 2026-11-12 used a per-machine
+key: a phone that still has one needs a single uninstall (export Infinite examples first).
+Never use this key for a release.
+
 Art/font decoding is part of the offline Gradle build; no API key or runtime
 download is required. Sync Gradle after build-script changes.
 
