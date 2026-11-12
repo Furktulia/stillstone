@@ -78,6 +78,43 @@ Measured with dumpsys gfxinfo / top / power on the debug build:
 No change was needed. A real figure needs a release build on a phone (Android's battery
 usage screen, or Android Studio's energy profiler) over a long session.
 
+## Hidden colours and the refreshed campaign (2026-11-12, awaiting review)
+
+**Hidden colours** (Settings → Hidden colors, off by default, applies to every puzzle).
+Only a tube's top stone shows its colour; a stone is revealed the first time it is on top
+and stays revealed, including after Undo and Restart. Moving rules are unchanged, so a
+move still carries every matching stone under the top one, seen or not. Unseen stones are
+always the bottom ones of a tube: their number is one less than the smallest size the tube
+has had (engine/HiddenColors.kt), so nothing new is saved. Hints still use full knowledge.
+
+Does it make puzzles harder? Measured with the four simple strategies, with and without
+sight of buried stones (`hidden-study`, 120 shuffles per recipe):
+- two spare tubes: no difference. 1,077 of 1,080 starts that are relaxed in the open stay relaxed.
+- one spare tube: clearly harder. Starts that are relaxed in the open are solved 66–90% of
+  the time blind instead of ~100%, and roughly a third to a half of them stop being relaxed.
+- shipped example: Moonlight 10 is solved 100% in the open and 27% blind.
+So the E2 Infinite recipe is not reused. H1 codes (H1-R / H1-B / H1-C) use the same starts
+but take the tier from the blind success rate (20 games per strategy). New Infinite puzzles
+are H1 while the setting is on. PC timing: about 25 ms per puzzle against 3 ms for E2; not
+measured on a phone. E1 and E2 codes are unchanged.
+Limits: bot success is not a human rating, and the reveal happens when a move is made,
+which can be a moment before the covering stones visibly lift.
+
+**Campaign refresh** (playtest-v3.txt; playtest-v2.txt kept for reference and tests).
+The creator asked for the relaxed levels to be redone as longer but still safe, keeping the
+later medium and hard ones. 22 relaxed levels were replaced with new ones ("-calm-" IDs)
+from `relaxed-campaign`, each with NO losing position anywhere in its state graph, solved
+100% by simple play in the open and blind, and ordered by length within its world:
+Dusk 6–13 moves (was 3–8), Moonlight 7–16 (was 7–13), Midnight 8–18 (was 7–16).
+Kept unchanged: the five introductions and the six hard levels, which now close each
+world (Midnight's former level 7 moved to the end group). Dusk 10, Moonlight 11, Midnight
+10–12. 33 levels: 10 / 11 / 12.
+Saves: progress on a replaced level is dropped with the existing "incompatible saved
+puzzle was reset" notice; completed marks for kept levels survive.
+Shortest solutions cannot grow much further with at most five colours and two spare
+tubes; longer relaxed levels would need more colours or larger tubes (a product decision).
+Not yet played by a person.
+
 ## Quiet controls and game-styled dialogs (2026-11-12, awaiting review)
 
 A friend who playtested found the Undo / Restart / Hint stone buttons distracting.

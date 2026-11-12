@@ -42,7 +42,13 @@ data class PuzzleAnalysis(
     val bestBotPercent: Int get() = bestBotSuccesses * 100 / botTrials
 
     /** Null when the measurements fit none of the anchored tiers; such puzzles are not offered. */
-    val tier: PuzzleTier? get() {
+    val tier: PuzzleTier? get() = tierFor(bestBotPercent)
+
+    /**
+     * The tier this puzzle would have if simple strategies succeeded [bestBotPercent] of the
+     * time. Used with the hidden-colours success rate, where the strategies see less.
+     */
+    fun tierFor(bestBotPercent: Int): PuzzleTier? {
         val misleading = minTemptations + minCounterGreedy
         return when {
             bestBotPercent >= 90 -> PuzzleTier.RELAXED

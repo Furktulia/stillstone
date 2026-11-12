@@ -15,9 +15,9 @@ class LevelPackTest {
     @Test fun roundTripPreservesBoardsCertificatesMetadataAndOrder() {
         val pack = BundledLevelPacks.playtest()
         assertEquals(pack, LevelPackCodec.decode(LevelPackCodec.encode(pack)))
-        assertEquals(32, pack.levels.size)
+        assertEquals(33, pack.levels.size)
         assertEquals(listOf("three", "four", "five"), pack.worlds.map { it.id })
-        assertEquals(listOf(10, 11, 11), pack.worlds.map { w -> pack.levels.count { it.worldId == w.id } })
+        assertEquals(listOf(10, 11, 12), pack.worlds.map { w -> pack.levels.count { it.worldId == w.id } })
     }
 
     @Test fun everyBundledCertificateHasTheClaimedShortestLength() {
@@ -30,18 +30,46 @@ class LevelPackTest {
         }
     }
 
-    @Test fun starterBoardsIdsAndCertificatesAreUnchangedInTheLargerPack() {
-        val current = BundledLevelPacks.playtest().levels.associateBy { it.id }
-        for (old in BundledLevelPacks.starter().levels) assertEquals(old, current[old.id])
+    /**
+     * 2026-11-12, at the creator's request: the relaxed levels were replaced by longer ones.
+     * Introductions and the harder late levels were kept, and a kept level never changes
+     * under its ID, so saved progress on it stays valid.
+     */
+    @Test fun levelsCarriedOverFromTheEarlierCampaignKeepTheirBoardsCertificatesAndIds() {
+        val earlier = BundledLevelPacks.playtestV2().levels.associateBy { it.id }
+        val current = BundledLevelPacks.playtest().levels
+        val kept = current.filter { it.id in earlier }
+        for (level in kept) assertEquals(level, earlier[level.id])
+        assertEquals(listOf(
+            "three-01", "three-02", "three-03", "three-challenge-22261-6cd50517eded",
+            "four-introduction-23261-b804878cf7dd", "four-challenge-26260-de975aa96ece", "four-challenge-40015-6dc0590dc1e5",
+            "five-introduction-27262-139b1cc81ba3", "five-challenge-30260-381678832b0e",
+            "five-challenge-30261-65212bc2cf14", "five-challenge-50028-5946afb17f81",
+        ), kept.map { it.id })
+        // The hard levels close each world.
+        for (world in listOf("three", "four", "five")) {
+            val roles = current.filter { it.worldId == world }.map { it.role }
+            assertEquals(roles.count { it == LevelRole.CHALLENGE }, roles.takeLastWhile { it == LevelRole.CHALLENGE }.size)
+        }
     }
 
-    @Test fun everyPreviousPlaytestLevelRetainsItsBoardCertificateAndId() {
-        val current = BundledLevelPacks.playtest().levels.associateBy { it.id }
-        for (old in BundledLevelPacks.previousPlaytest().levels) assertEquals(old, current[old.id])
-        assertEquals(
-            BundledLevelPacks.previousPlaytest().levels.filter { it.worldId == "three" },
-            BundledLevelPacks.playtest().levels.filter { it.worldId == "three" },
-        )
+    @Test fun replacementLevelsCannotGetStuckStayRelaxedWithHiddenColorsAndGrowLonger() {
+        val earlier = BundledLevelPacks.playtestV2().levels.map { it.id }.toSet()
+        val fresh = BundledLevelPacks.playtest().levels.filter { it.id !in earlier }
+        assertEquals(22, fresh.size)
+        for (level in fresh) {
+            assertTrue(level.id, "-calm-" in level.id)
+            val analysis = (PuzzleAnalyzer.analyze(level.board, botTrials = 100) as AnalysisOutcome.Analyzed).analysis
+            assertEquals("${level.id} has a position with no way out", 0, analysis.losingStates)
+            assertEquals(level.id, PuzzleTier.RELAXED, analysis.tier)
+            assertTrue(level.id, requireNotNull(HiddenColors.bestBlindSuccesses(level.board, 100)) >= 90)
+            assertEquals(level.id, level.solution.size, analysis.solution.size)
+        }
+        for (world in listOf("three", "four", "five")) {
+            val lengths = fresh.filter { it.worldId == world }.map { it.solution.size }
+            assertEquals(world, lengths.sorted(), lengths)
+            assertTrue(world, lengths.last() >= lengths.first() + 6)
+        }
     }
 
     @Test fun bundledCollectionIsStructurallyDistinct() {

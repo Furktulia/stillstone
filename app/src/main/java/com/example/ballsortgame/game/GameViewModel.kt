@@ -36,6 +36,11 @@ data class GameUiState(
     val reducedMotion: Boolean = false,
     val saveWarning: String? = null,
     val revision: Long = 0,
+    /**
+     * For play with hidden colours: how many bottom stones of each tube the player has never
+     * seen. Always tracked; whether it is shown is a display choice (see HiddenColors).
+     */
+    val unseen: List<Int> = emptyList(),
 )
 
 class GameViewModel(
@@ -50,6 +55,11 @@ class GameViewModel(
     private var revision = 0L
     private var animations = emptyList<MovingGroup>()
     private val knownSolutions = HashMap<Board, List<Move>>()
+    // Smallest size each tube of the current puzzle has had while the player watched. Undo and
+    // restart do not shrink it back: a colour that has been seen stays seen. Not saved; after
+    // a restart of the app it is rebuilt from the saved moves, which is all that is known.
+    private var smallestSizes = HiddenColors.smallestSizes(session.level.initial, session.moves)
+    private fun forgetSeen() { smallestSizes = HiddenColors.smallestSizes(session.level.initial, session.moves) }
 
     init {
         levels.forEach { cacheSolution(it.initial, it.solution) }
@@ -71,6 +81,7 @@ class GameViewModel(
                 GameSession(levels, stored.progress) to stored.warning
             }
             session = restored.first
+            forgetSeen()
             publish(message = restored.second ?: if (session.repairedSave) {
                 "An incompatible saved puzzle was reset. Your other progress was kept."
             } else "")
@@ -93,6 +104,7 @@ class GameViewModel(
             message = message, recovery = recovery,
             colorLabels = session.progress.colorLabels, reducedMotion = session.progress.reducedMotion,
             saveWarning = mutableState.value.saveWarning, revision = revision,
+            unseen = HiddenColors.hiddenCounts(smallestSizes),
         )
     }
 
@@ -132,6 +144,7 @@ class GameViewModel(
             return
         }
         check(session.move(move))
+        HiddenColors.observe(smallestSizes, session.board)
         if (!session.progress.reducedMotion) animations = animations + MovingGroup(revision, before, move, transfer.count)
         publish()
         persist()
@@ -174,6 +187,7 @@ class GameViewModel(
         invalidate()
         animations = emptyList()
         session.chooseLevel(levels[index].id)
+        forgetSeen()
         publish()
         persist()
     }

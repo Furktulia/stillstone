@@ -4,7 +4,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PuzzleAnalysisTest {
-    private val pack = BundledLevelPacks.playtest()
+    // The human-rated reference puzzles are those of the earlier campaign, some since replaced.
+    private val pack = BundledLevelPacks.playtestV2()
+
+    @Test fun hidingColorsLeavesTwoSpareTubesRelaxedButNotOneSpareTube() {
+        // Moonlight 10 is solved by simple play every time in the open, and rarely when blind.
+        val level = pack.levels.first { it.id.startsWith("four-challenge-26260") }
+        assertEquals(100, (PuzzleAnalyzer.analyze(level.board, botTrials = 100) as AnalysisOutcome.Analyzed).analysis.bestBotPercent)
+        assertTrue(requireNotNull(HiddenColors.bestBlindSuccesses(level.board, 100)) < 60)
+        val roomy = pack.levels.first { it.id == "four-01" }
+        assertEquals(100, HiddenColors.bestBlindSuccesses(roomy.board, 100))
+        assertNull(HiddenColors.bestBlindSuccesses(roomy.board, 100) { true })
+    }
+
+    @Test fun unseenStonesAreTheBottomOnesAndStaySeenOnceUncovered() {
+        val board = Board(listOf(Tube(3, listOf(0, 1, 0)), Tube(3, listOf(1, 1, 0)), Tube(3)))
+        assertEquals(listOf(2, 2, 0), HiddenColors.hiddenCounts(HiddenColors.smallestSizes(board, emptyList())))
+        // Tube 1's top stone leaves, uncovering the one beneath; tube 3 receives a seen stone.
+        assertEquals(listOf(1, 2, 0), HiddenColors.hiddenCounts(HiddenColors.smallestSizes(board, listOf(Move(0, 2)))))
+        // Tube 2 loses its top stone and is then filled again: what was uncovered stays known.
+        val sizes = HiddenColors.smallestSizes(board, listOf(Move(0, 2), Move(1, 2), Move(0, 1)))
+        assertEquals(listOf(0, 1, 0), HiddenColors.hiddenCounts(sizes))
+    }
     private fun analysis(id: String, trials: Int): PuzzleAnalysis {
         val level = pack.levels.first { it.id.startsWith(id) }
         val outcome = PuzzleAnalyzer.analyze(level.board, botTrials = trials)

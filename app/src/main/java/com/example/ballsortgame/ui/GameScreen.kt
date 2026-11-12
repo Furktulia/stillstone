@@ -25,6 +25,8 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
     var compareSounds by rememberSaveable { mutableStateOf(false) }
     var confirmRestart by rememberSaveable { mutableStateOf(false) }
     val feedback = rememberGameFeedback()
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    PlayOptions.load(appContext) // Reads the saved choice once; later calls do nothing.
     val tap: (Int) -> Unit = { index ->
         if (state.reducedMotion && state.selected != null && state.selected != index) {
             PuzzleRules.transfer(state.board, com.example.ballsortgame.engine.Move(state.selected, index))?.let { transfer ->
@@ -55,7 +57,7 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                         Modifier.fillMaxSize().widthIn(max = 1100.dp).align(Alignment.Center),
                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                     ) {
-                        PuzzleBoard(state, tap, actions.finishTransfer, Modifier.weight(1f).fillMaxHeight(), feedback::landing, feedback::contact)
+                        PuzzleBoard(state, tap, actions.finishTransfer, Modifier.weight(1f).fillMaxHeight(), feedback::landing, feedback::contact, PlayOptions.hiddenColors)
                         Column(
                             Modifier.width(240.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -75,7 +77,7 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                         GameHeader(level, worldNumber, { if (browse != null) browse() else showLevels = true }, { showSettings = true }, showBrowse, extraAction)
                         PuzzleBoard(
                             state, tap, actions.finishTransfer,
-                            Modifier.weight(1f).fillMaxWidth(), feedback::landing, feedback::contact,
+                            Modifier.weight(1f).fillMaxWidth(), feedback::landing, feedback::contact, PlayOptions.hiddenColors,
                         )
                         GameStatus(state)
                         Spacer(Modifier.height(12.dp))
@@ -209,6 +211,16 @@ internal fun SettingsDialog(state: GameUiState, feedback: GameFeedback, change: 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Gentle haptics", Modifier.weight(1f))
                     NightSwitch(feedback.haptics, feedback::haptics, modifier = Modifier.semantics { contentDescription = "Gentle haptics" })
+                }
+                Column {
+                    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Hidden colors", Modifier.weight(1f))
+                        NightSwitch(PlayOptions.hiddenColors, { PlayOptions.hiddenColors(context, it) },
+                            modifier = Modifier.semantics { contentDescription = "Hidden colors" })
+                    }
+                    Text("Only the top stone of each tube shows its color until you uncover the ones beneath. " +
+                        "New Infinite puzzles are chosen to suit this.", style = MaterialTheme.typography.bodySmall)
                 }
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {

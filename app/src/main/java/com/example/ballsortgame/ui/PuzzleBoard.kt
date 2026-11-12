@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -45,7 +46,9 @@ private class GroupFlight {
 }
 
 @Composable
-fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (Long) -> Unit, modifier: Modifier = Modifier, onImpact: (LandingImpact) -> Unit = {}, onContact: (StoneContact) -> Unit = {}) {
+fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (Long) -> Unit, modifier: Modifier = Modifier, onImpact: (LandingImpact) -> Unit = {}, onContact: (StoneContact) -> Unit = {}, hideColors: Boolean = false) {
+    // With hidden colours, the stones the player has never seen are the bottom ones of a tube.
+    fun unseen(tube: Int) = if (hideColors) state.unseen.getOrElse(tube) { 0 } else 0
     val density = LocalDensity.current.density
     val look = LocalWorldLook.current
     val groups = state.transfers
@@ -247,7 +250,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                 val outline = when {
                     state.hint?.destination == index -> Color(0xFF9DD8BF)
                     state.selected == index -> look.accent
-                    stationary[index].size == tube.capacity && stationary[index].distinct().size == 1 -> Color(0xFF8CA99F)
+                    unseen(index) == 0 && stationary[index].size == tube.capacity && stationary[index].distinct().size == 1 -> Color(0xFF8CA99F)
                     else -> look.tube
                 }
                 val path = Path().apply {
@@ -262,11 +265,14 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                 drawPath(path, outline, style = Stroke(if (state.selected == index || state.hint?.destination == index) 2.2f * density else 1.4f * density))
 
                 stationary[index].forEachIndexed { pieceIndex, color ->
-                    val lifted = groups.isEmpty() && state.selected == index && pieceIndex >= tube.balls.size - tube.topRun
+                    // Lifting an unseen stone with the selection would give its colour away.
+                    val lifted = groups.isEmpty() && state.selected == index &&
+                        pieceIndex >= maxOf(tube.balls.size - tube.topRun, unseen(index))
                     val bounce = settling.offset(index, pieceIndex)
                     drawStone(
                         Offset(geometry.centerX, geometry.pieceY(pieceIndex, density) - bounce - if (lifted) 7f * density * selectionLift else 0f),
                         geometry.slot, color, state.colorLabels, numberPaint, look.light,
+                        veil = if (pieceIndex < unseen(index)) lerp(look.base, look.tube, 0.55f) else null,
                     )
                 }
                 numberPaint.color = android.graphics.Color.rgb(168, 158, 184)
@@ -290,7 +296,8 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
         state.board.tubes.forEachIndexed { index, tube ->
             val position = layout[index]
             val description = if (tube.balls.isEmpty()) "Empty. Capacity ${tube.capacity}." else {
-                "Capacity ${tube.capacity}. Bottom to top: " + tube.balls.joinToString(", ") { PieceNames.getOrElse(it) { "color ${it + 1}" } } +
+                "Capacity ${tube.capacity}. Bottom to top: " + tube.balls.withIndex().joinToString(", ") { (slot, color) ->
+                    if (slot < unseen(index)) "hidden" else PieceNames.getOrElse(color) { "color ${color + 1}" } } +
                     if (tube.isComplete) ". Full and sorted." else "."
             }
             Box(
@@ -313,9 +320,10 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
     }
 }
 
-private fun DrawScope.drawStone(center: Offset, slot: Float, colorId: Int, labels: Boolean, paint: Paint, light: Color) {
+/** [veil] draws a stone whose colour the player has not seen yet: same shape, night-coloured, marked "?". */
+private fun DrawScope.drawStone(center: Offset, slot: Float, colorId: Int, labels: Boolean, paint: Paint, light: Color, veil: Color? = null) {
     val diameter = slot * 0.86f
-    val color = lerp(PieceColors[colorId % PieceColors.size], light, 0.045f)
+    val color = veil ?: lerp(PieceColors[colorId % PieceColors.size], light, 0.045f)
     drawOval(Color.Black.copy(alpha = 0.18f), topLeft = Offset(center.x - diameter * 0.43f, center.y + diameter * 0.34f), size = Size(diameter * 0.86f, diameter * 0.2f))
     translate(center.x - diameter / 2, center.y - diameter / 2) {
         drawRoundRect(
@@ -336,7 +344,12 @@ private fun DrawScope.drawStone(center: Offset, slot: Float, colorId: Int, label
             drawLine(light.copy(alpha = 0.045f), Offset(x, y), Offset(x + diameter * 0.045f, y - diameter * 0.012f),
                 strokeWidth = (diameter * 0.008f).coerceAtLeast(0.5f))
         }
-        if (labels) {
+        if (veil != null) {
+            paint.textSize = diameter * 0.44f
+            paint.color = light.copy(alpha = 0.42f).toArgb()
+            val baseline = diameter / 2 - (paint.descent() + paint.ascent()) / 2
+            drawContext.canvas.nativeCanvas.drawText("?", diameter / 2, baseline, paint)
+        } else if (labels) {
             paint.textSize = diameter * 0.46f
             paint.color = android.graphics.Color.rgb(29, 22, 39)
             paint.typeface = Typeface.DEFAULT_BOLD
