@@ -37,6 +37,14 @@ internal class SettlingColumns(
     private val restSpeed = 0.7f * slot
     private val restGap = 0.01f * slot
     private val contacts = ArrayList<StoneContact>()
+    private val lids = FloatArray(tubes) { Float.POSITIVE_INFINITY }
+
+    /**
+     * A stone hovering over [tube], still in flight: the tube's top stone may rise at most
+     * [limit] above its resting slot before touching it. Infinity when nothing is overhead.
+     * Without this a stone rebounding out of its tube passed through one waiting to drop in.
+     */
+    fun lid(tube: Int, limit: Float) { lids[tube] = limit.coerceAtLeast(0f) }
 
     /** Contacts since the last call, in the order they happened. For sound and haptics only. */
     fun drainContacts(): List<StoneContact> {
@@ -125,10 +133,15 @@ internal class SettlingColumns(
             }
             // Overhead contact, then push that limit back down the stack.
             for (i in n - 1 downTo 0) {
-                val limit = ceiling(tube, i).coerceAtLeast(0f)
+                val fixed = ceiling(tube, i).coerceAtLeast(0f)
+                val stone = if (i == n - 1) lids[tube] else Float.POSITIVE_INFINITY
+                val limit = minOf(fixed, stone)
                 if (o[i] > limit) {
                     o[i] = limit
-                    if (v[i] > 0f) { report(ContactKind.OVERHEAD, tube, v[i]); v[i] = -CEILING_RESTITUTION * v[i] }
+                    if (v[i] > 0f) {
+                        report(if (stone < fixed) ContactKind.STONE else ContactKind.OVERHEAD, tube, v[i])
+                        v[i] = -(if (stone < fixed) STONE_RESTITUTION * 0.5f else CEILING_RESTITUTION) * v[i]
+                    }
                 }
                 if (i < n - 1 && o[i] > o[i + 1]) {
                     o[i] = o[i + 1]

@@ -62,7 +62,7 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                         ) {
                             GameHeader(level, worldNumber, { if (browse != null) browse() else showLevels = true }, { showSettings = true }, showBrowse, extraAction)
                             GameStatus(state)
-                            GameControls(state, actions, restart, vertical = LocalDensity.current.fontScale > 1.4f)
+                            GameControls(state, actions, restart)
                             Completion(state, nextPuzzle == null && state.levelIndex == levels.lastIndex) {
                                 if (nextPuzzle != null) nextPuzzle() else if (state.levelIndex == levels.lastIndex) { if (browse != null) browse() else showLevels = true } else actions.chooseLevel(state.levelIndex + 1)
                             }
@@ -79,7 +79,7 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                         )
                         GameStatus(state)
                         Spacer(Modifier.height(12.dp))
-                        GameControls(state, actions, restart, vertical = LocalDensity.current.fontScale > 1.4f)
+                        GameControls(state, actions, restart)
                         Completion(state, nextPuzzle == null && state.levelIndex == levels.lastIndex) {
                             if (nextPuzzle != null) nextPuzzle() else if (state.levelIndex == levels.lastIndex) { if (browse != null) browse() else showLevels = true } else actions.chooseLevel(state.levelIndex + 1)
                         }
@@ -96,15 +96,15 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
     }, onSettings = { showSettings = true })
     if (showSettings) SettingsDialog(state, feedback, actions.settings, { showSettings = false; compareSounds = true }) { showSettings = false }
     if (compareSounds) SoundComparison(feedback) { compareSounds = false; showSettings = true }
-    if (confirmRestart) AlertDialog(
+    if (confirmRestart) NightDialog(
         onDismissRequest = { confirmRestart = false },
         title = { Text("Start this puzzle again?") },
         text = { Text("Your current arrangement and undo history for this puzzle will be reset. Other puzzles are kept.") },
-        confirmButton = { TextButton(onClick = { actions.restart(); confirmRestart = false }) { Text("Restart puzzle") } },
-        dismissButton = { TextButton(onClick = { confirmRestart = false }) { Text("Keep playing") } },
+        confirmButton = { NightDialogAction("Restart puzzle", primary = true) { actions.restart(); confirmRestart = false } },
+        dismissButton = { NightDialogAction("Keep playing") { confirmRestart = false } },
     )
     state.recovery?.let { recovery ->
-        AlertDialog(
+        NightDialog(
             onDismissRequest = actions.dismissRecovery,
             title = { Text(if (recovery.provenUnsolvable) "A way back" else "No hint found yet") },
             text = {
@@ -114,8 +114,8 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                         "Undo ${recovery.undoCount} ${if (recovery.undoCount == 1) "move" else "moves"} to return to a position with a known solution.",
                 )
             },
-            confirmButton = { TextButton(onClick = actions.recover) { Text("Go back") } },
-            dismissButton = { TextButton(onClick = actions.dismissRecovery) { Text("Keep playing") } },
+            confirmButton = { NightDialogAction("Go back", primary = true, onClick = actions.recover) },
+            dismissButton = { NightDialogAction("Keep playing", onClick = actions.dismissRecovery) },
         )
     }
 }
@@ -167,26 +167,20 @@ private fun GameStatus(state: GameUiState) {
 }
 
 @Composable
-private fun GameControls(state: GameUiState, actions: GameActions, restart: () -> Unit, vertical: Boolean) {
-    @Composable fun Undo(modifier: Modifier) {
-        NightButton("Undo", modifier.testTag("undo"), enabled = state.canUndo, symbol = NightSymbol.UNDO, onClick = actions.undo)
-    }
-    @Composable fun Restart(modifier: Modifier) {
-        NightButton(if (state.board.isSolved) "Replay" else "Restart", modifier.testTag("restart"),
-            symbol = NightSymbol.RESTART, onClick = restart)
-    }
-    @Composable fun Hint(modifier: Modifier) {
-        NightButton(if (state.thinking) "Cancel hint" else "Hint", modifier.testTag("hint"),
-            enabled = !state.board.isSolved, symbol = NightSymbol.HINT,
-            onClick = if (state.thinking) actions.cancelHint else actions.hint)
-    }
-    if (vertical) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Undo(Modifier.fillMaxWidth()); Restart(Modifier.fillMaxWidth()); Hint(Modifier.fillMaxWidth())
-        }
-    } else {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Undo(Modifier.weight(1f)); Restart(Modifier.weight(1f)); Hint(Modifier.weight(1f))
+private fun GameControls(state: GameUiState, actions: GameActions, restart: () -> Unit) {
+    val intro = rememberControlIntro()
+    val solved = state.board.isSolved
+    LaunchedEffect(solved) { if (solved) intro.puzzleSolved() }
+    // Quiet outline icons, one row at any text size: the board is what the player looks at.
+    Row(Modifier.fillMaxWidth()) {
+        QuietControl(NightSymbol.UNDO, "Undo", Modifier.weight(1f).testTag("undo"), enabled = state.canUndo,
+            showName = intro.showName(NightSymbol.UNDO)) { intro.used(NightSymbol.UNDO); actions.undo() }
+        QuietControl(NightSymbol.RESTART, if (solved) "Replay" else "Restart", Modifier.weight(1f).testTag("restart"),
+            showName = intro.showName(NightSymbol.RESTART)) { intro.used(NightSymbol.RESTART); restart() }
+        QuietControl(NightSymbol.HINT, if (state.thinking) "Cancel hint" else "Hint", Modifier.weight(1f).testTag("hint"),
+            enabled = !solved, showName = state.thinking || intro.showName(NightSymbol.HINT)) {
+            intro.used(NightSymbol.HINT)
+            if (state.thinking) actions.cancelHint() else actions.hint()
         }
     }
 }
@@ -202,23 +196,24 @@ private fun Completion(state: GameUiState, last: Boolean, next: () -> Unit) {
 
 @Composable
 internal fun SettingsDialog(state: GameUiState, feedback: GameFeedback, change: (Boolean, Boolean) -> Unit, compare: () -> Unit, dismiss: () -> Unit) {
-    AlertDialog(
+    NightDialog(
         onDismissRequest = dismiss, title = { Text("Make yourself comfortable") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Stone sounds", Modifier.weight(1f))
-                    Switch(feedback.sound, feedback::sound, modifier = Modifier.semantics { contentDescription = "Stone sounds" })
+                    NightSwitch(feedback.sound, feedback::sound, modifier = Modifier.semantics { contentDescription = "Stone sounds" })
                 }
-                TextButton(onClick = compare) { Text("Compare sounds · ${feedback.style.title}") }
+                // Pulled left so its lettering lines up with the rows around it.
+                NightDialogAction("Sound · ${feedback.style.title} ›", Modifier.offset(x = (-14).dp), onClick = compare)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Gentle haptics", Modifier.weight(1f))
-                    Switch(feedback.haptics, feedback::haptics, modifier = Modifier.semantics { contentDescription = "Gentle haptics" })
+                    NightSwitch(feedback.haptics, feedback::haptics, modifier = Modifier.semantics { contentDescription = "Gentle haptics" })
                 }
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Color labels", Modifier.weight(1f))
-                        Switch(
+                        NightSwitch(
                             checked = state.colorLabels, onCheckedChange = { change(it, state.reducedMotion) },
                             modifier = Modifier.semantics { contentDescription = "Color labels" },
                         )
@@ -228,7 +223,7 @@ internal fun SettingsDialog(state: GameUiState, feedback: GameFeedback, change: 
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Reduced motion", Modifier.weight(1f))
-                        Switch(
+                        NightSwitch(
                             checked = state.reducedMotion, onCheckedChange = { change(state.colorLabels, it) },
                             modifier = Modifier.semantics { contentDescription = "Reduced motion" },
                         )
@@ -237,6 +232,6 @@ internal fun SettingsDialog(state: GameUiState, feedback: GameFeedback, change: 
                 }
             }
         },
-        confirmButton = { TextButton(onClick = dismiss) { Text("Done") } },
+        confirmButton = { NightDialogAction("Done", primary = true, onClick = dismiss) },
     )
 }

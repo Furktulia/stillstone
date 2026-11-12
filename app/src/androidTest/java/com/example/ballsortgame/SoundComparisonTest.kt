@@ -58,5 +58,9 @@ class SoundComparisonTest {
         compose.onNodeWithText("Use Ceramic").performClick()
         compose.onNodeWithText("Selected: Ceramic").assertIsDisplayed()
         assertEquals("CERAMIC", context.getSharedPreferences("feedback", 0).getString("style", null))
+        // Leave nothing behind in the playtest app. The pause lets the asynchronous save finish
+        // first; otherwise it recreates the file just after it is deleted.
+        Thread.sleep(600)
+        base.deleteSharedPreferences(prefix + "feedback")
     }
 }

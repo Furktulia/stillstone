@@ -40,7 +40,7 @@ internal fun SoundComparison(feedback: GameFeedback, dismiss: () -> Unit) {
         lifecycle.addObserver(observer)
         onDispose { task?.cancel(); lifecycle.removeObserver(observer); player.release() }
     }
-    AlertDialog(onDismissRequest = dismiss, title = { Text("Compare drop sounds") }, text = {
+    NightDialog(onDismissRequest = dismiss, title = { Text("Compare drop sounds") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Synthetic material studies. Use the same drop and volume to compare their character.")
             ImpactStyle.entries.forEach { style ->
@@ -87,6 +87,6 @@ internal fun SoundComparison(feedback: GameFeedback, dismiss: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }, confirmButton = {
-        TextButton(onClick = { feedback.style(selected); dismiss() }) { Text("Use ${selected.title}") }
-    }, dismissButton = { TextButton(onClick = dismiss) { Text("Back") } })
+        NightDialogAction("Use ${selected.title}", primary = true) { feedback.style(selected); dismiss() }
+    }, dismissButton = { NightDialogAction("Back", onClick = dismiss) })
 }

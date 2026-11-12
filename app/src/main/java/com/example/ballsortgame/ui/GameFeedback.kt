@@ -125,7 +125,7 @@ internal class GameFeedback(
         private set
     var haptics by mutableStateOf(prefs.getBoolean("haptics", false))
         private set
-    var style by mutableStateOf(ImpactStyle.entries.firstOrNull { it.name == prefs.getString("style", "") } ?: ImpactStyle.PEBBLE)
+    var style by mutableStateOf(ImpactStyle.entries.firstOrNull { it.name == prefs.getString("style", "") } ?: ImpactStyle.RIVER)
         private set
     fun style(value: ImpactStyle) { style = value; prefs.edit().putString("style", value.name).apply() }
     fun sound(value: Boolean) { sound = value; prefs.edit().putBoolean("sound", value).apply() }

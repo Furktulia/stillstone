@@ -125,7 +125,7 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                 { browserSettings = false; browserCompare = true }, { browserSettings = false })
             if (browserCompare) SoundComparison(feedback) { browserCompare = false; browserSettings = true }
         }
-    if (menu) AlertDialog(onDismissRequest = { menu = false }, title = { Text("Infinite play") }, text = {
+    if (menu) NightDialog(onDismissRequest = { menu = false }, title = { Text("Infinite play") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             TextButton(onClick = {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
@@ -150,9 +150,9 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
             TextButton(onClick = { scope.launch { saved = withContext(Dispatchers.IO) { endless.examples().lines().filter { it.isNotBlank() } } }; menu = false }) { Text("Saved examples") }
             TextButton(onClick = { export.launch("ball-sort-examples.ndjson"); menu = false }) { Text("Export saved examples") }
         }
-    }, confirmButton = { TextButton(onClick = { menu = false }) { Text("Done") } })
+    }, confirmButton = { NightDialogAction("Done", primary = true) { menu = false } })
     saved?.let { examples ->
-        AlertDialog(onDismissRequest = { saved = null }, title = { Text("Saved examples") },
+        NightDialog(onDismissRequest = { saved = null }, title = { Text("Saved examples") },
             text = { androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 400.dp)) {
                 if (examples.isEmpty()) item { Text("No examples saved yet.") }
                 items(examples.size) { index ->
@@ -161,15 +161,15 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                         Text(value.optString("code") + " · " + value.optString("quality") + "\n" + value.optString("note"))
                     }
                 }
-            } }, confirmButton = { TextButton(onClick = { saved = null }) { Text("Done") } })
+            } }, confirmButton = { NightDialogAction("Done", primary = true) { saved = null } })
     }
-    if (enter) AlertDialog(onDismissRequest = { enter = false }, title = { Text("Replay a code") },
+    if (enter) NightDialog(onDismissRequest = { enter = false }, title = { Text("Replay a code") },
         text = { OutlinedTextField(code, { code = it }, label = { Text("For example E2-B-1") }) },
-        confirmButton = { TextButton(onClick = { endless.next(recipe.first(), code); enter = false }) { Text("Load") } },
-        dismissButton = { TextButton(onClick = { enter = false }) { Text("Cancel") } })
-    if (bookmark) AlertDialog(onDismissRequest = { bookmark = false }, title = { Text("Save this example") },
+        confirmButton = { NightDialogAction("Load", primary = true) { endless.next(recipe.first(), code); enter = false } },
+        dismissButton = { NightDialogAction("Cancel") { enter = false } })
+    if (bookmark) NightDialog(onDismissRequest = { bookmark = false }, title = { Text("Save this example") },
         text = { Column { Text("Hard can be good. Describe what worked or felt wrong."); OutlinedTextField(note, { note = it }, label = { Text("Optional note") }) } },
-        confirmButton = { TextButton(onClick = { endless.bookmark("good", note) { message = it }; bookmark = false; note = "" }) { Text("Good example") } },
-        dismissButton = { TextButton(onClick = { endless.bookmark("needs-work", note) { message = it }; bookmark = false; note = "" }) { Text("Needs work") } })
+        confirmButton = { NightDialogAction("Good example") { endless.bookmark("good", note) { message = it }; bookmark = false; note = "" } },
+        dismissButton = { NightDialogAction("Needs work") { endless.bookmark("needs-work", note) { message = it }; bookmark = false; note = "" } })
     }
 }

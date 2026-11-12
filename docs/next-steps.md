@@ -41,7 +41,59 @@ to include them in the first release.
   group's path down the aisle. Assessment: physical collisions in flight are not worth it;
   a yield rule is (a later group holds short of an earlier group's remaining route, never
   the reverse, so nothing can deadlock, and if two groups already overlap it does nothing).
-  Not implemented; awaiting the creator's go-ahead.
+  Built 2026-11-12 (GroupRoute.claimed / entersClaimedSpace, stepped approach in
+  PuzzleBoard): a group bound for the same tube keeps its whole remaining route clear;
+  any other earlier group claims its body plus four slots ahead. A held group eases off
+  and resumes; it never waits more than 2.5 s in total. The final fall is not covered.
+  First version still failed on the creator's example: the held stone sat exactly at the
+  edge of the claimed space, sample points shifted as the first stone moved, the held stone
+  then counted as "already inside" and was let through. Fixed by measuring to the route
+  line itself and requiring "already inside" to mean well inside (0.7 slot). Confirmed on
+  the emulator with E2-B-11MK1N5UER: the stone from tube 4 waits beside the aisle.
+  A stone falling onto one that is rebounding up out of the tube now allows for the rising
+  stone's speed, so the two are not drawn overlapping for a frame.
+  River stone is the default sound for players who never chose one (creator's request).
+  Third cause found by logging every drawn stone position per frame: after a long drop the
+  first stone rebounds about five slots, out of its tube, and went through the second
+  stone still hovering above waiting to drop. SettlingColumns.lid(tube, limit) now makes
+  any stone in flight over a tube solid to that tube's top stone (stones lifting out of the
+  same tube are ignored). A falling stone is also handed to the settling motion one frame
+  before contact instead of being caught inside the stone below. On the example the log
+  went from 8 overlapping frames to 0. To repeat that check, log stone centres from the
+  board's draw pass and flag any pair closer than 0.97 of a slot.
+  Needs the creator's eye for pacing. The approach no longer uses a Compose tween, so it
+  ignores the system animation scale by construction.
+
+## Battery audit (2026-11-12, emulator only)
+
+Measured with dumpsys gfxinfo / top / power on the debug build:
+- Idle on the game screen (with and without a selected tube), the level grid and the world
+  browser: 0 frames drawn in 6–8 s and 0% CPU. No animation loop runs while nothing moves.
+- No wake lock is held and no audio track stays active after a sound finishes.
+- Work happens only while stones move, while the world list scrolls, during a hint search
+  and while Infinite prepares its next puzzles (foreground only).
+- The one costly spot is scrolling the world browser: about 30 ms per frame on the emulator
+  (mist layer, erase masks and gradients redrawn each frame). Brief, and unmeasured on a
+  phone. Caching the static backdrop would be the fix if a phone shows dropped frames.
+No change was needed. A real figure needs a release build on a phone (Android's battery
+usage screen, or Android Studio's energy profiler) over a long session.
+
+## Quiet controls and game-styled dialogs (2026-11-12, awaiting review)
+
+A friend who playtested found the Undo / Restart / Hint stone buttons distracting.
+- They are now QuietControl (NightUi.kt): thin outline icons at about 60% brightness, no
+  surface, one row. Stone buttons remain for navigation (back, Resume, Next puzzle).
+- ControlIntro.kt: each control shows its name underneath until it has been used once;
+  any names left retire after three solved puzzles. Holding a control shows its name for
+  about two seconds at any time. Stored in the "onboarding" preferences, not the save.
+- Every dialog uses NightDialog instead of Material's AlertDialog: settings, restart
+  confirmation, the "A way back" recovery tip, sound comparison, and the four Infinite
+  dialogs (options, saved examples, enter code, save example). Switches use NightSwitch.
+- Still stock Material inside those panels: the Infinite options list, filter chips,
+  radio buttons, slider, text fields and progress bars. The "⋯" Infinite button and the
+  "Tap a tube to begin." status line are unchanged.
+- PlaytestUiTest and SoundComparisonTest use prefixed preferences and delete them, so
+  running the emulator tests no longer changes the real app's name hints or settings.
 
 ## Continuous settling: implemented, awaiting phone review
 

@@ -61,6 +61,23 @@ class SettlingColumnsTest {
         assertTrue(under.any { it.kind == com.example.ballsortgame.ui.ContactKind.OVERHEAD })
     }
 
+    /** A stone waiting to drop in must stop one rebounding out of the tube, not be passed through. */
+    @Test fun aStoneHoveringOverTheTubeStopsTheReboundBelowIt() {
+        val speed = SettlingColumns.impactSpeed(slot * 4f, slot)
+        val free = SettlingColumns(1, slot)
+        free.land(0, 1, 0f, speed)
+        var highest = 0f
+        run(free, maxSeconds = 8f) { highest = maxOf(highest, free.offset(0, 0)) }
+        assertTrue("fixture must rebound well past the lid", highest > slot * 3f)
+
+        val covered = SettlingColumns(1, slot)
+        covered.lid(0, slot * 1.5f)
+        covered.land(0, 1, 0f, speed)
+        val contacts = mutableListOf<com.example.ballsortgame.ui.StoneContact>()
+        run(covered, maxSeconds = 8f, limit = slot * 1.5f) { contacts += covered.drainContacts() }
+        assertTrue(contacts.any { it.kind == com.example.ballsortgame.ui.ContactKind.STONE })
+    }
+
     @Test fun singleStoneReboundsToTheIntendedHeightAndComesToRest() {
         val columns = SettlingColumns(1, slot)
         val height = slot * 1.2f
