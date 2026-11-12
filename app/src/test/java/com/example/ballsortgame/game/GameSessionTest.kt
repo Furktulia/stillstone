@@ -8,7 +8,7 @@ class GameSessionTest {
     private val levels = LevelCatalog.levels
 
     @Test fun everyBundledPuzzleCanBePlayedAndUndoneThroughItsCertificate() {
-        assertEquals(32, levels.size)
+        assertEquals(33, levels.size)
         for (level in levels) {
             val session = GameSession(levels)
             session.chooseLevel(level.id)
@@ -84,21 +84,36 @@ class GameSessionTest {
         assertTrue(session.board.isSolved)
     }
 
-    @Test fun progressFromTheOriginalTwelveLevelsSurvivesWorldExpansion() {
-        val old = com.example.ballsortgame.engine.BundledLevelPacks.starter().levels.map {
+    @Test fun progressOnKeptLevelsSurvivesTheCampaignRefreshAndRetiredLevelsAreDroppedSafely() {
+        val old = com.example.ballsortgame.engine.BundledLevelPacks.playtestV2().levels.map {
             PlayableLevel(it.id, it.worldId, it.board, it.solution)
         }
+        // A level that was kept: the arrangement, undo history and settings come back.
+        val kept = "four-challenge-40015-6dc0590dc1e5"
         val previous = GameSession(old)
-        previous.chooseLevel("four-04")
-        old.first { it.id == "four-04" }.solution.take(4).forEach { assertTrue(previous.move(it)) }
+        previous.chooseLevel(kept)
+        old.first { it.id == kept }.solution.take(4).forEach { assertTrue(previous.move(it)) }
         previous.settings(colorLabels = true, reducedMotion = true)
         val restored = GameSession(levels, ProgressCodec.decode(ProgressCodec.encode(previous.progress)))
         assertFalse(restored.repairedSave)
-        assertEquals("four-04", restored.level.id)
+        assertEquals(kept, restored.level.id)
         assertEquals(previous.board, restored.board)
         assertEquals(previous.moves, restored.moves)
         assertTrue(restored.progress.colorLabels && restored.progress.reducedMotion)
         assertTrue(restored.undo())
+
+        // A level that was replaced: its history is dropped, nothing else is lost, and play
+        // starts from the first level instead of crashing on an unknown ID.
+        val retired = GameSession(old)
+        retired.chooseLevel("three-01")
+        old.first { it.id == "three-01" }.solution.forEach { assertTrue(retired.move(it)) }
+        retired.chooseLevel("four-04")
+        old.first { it.id == "four-04" }.solution.take(3).forEach { assertTrue(retired.move(it)) }
+        val repaired = GameSession(levels, ProgressCodec.decode(ProgressCodec.encode(retired.progress)))
+        assertTrue(repaired.repairedSave)
+        assertEquals(levels.first().id, repaired.level.id)
+        assertTrue("three-01" in repaired.progress.completed)
+        assertFalse(repaired.progress.histories.containsKey("four-04"))
     }
 
     @Test fun previousThirtyPuzzleSavesAndCompletionSurviveNewFinales() {

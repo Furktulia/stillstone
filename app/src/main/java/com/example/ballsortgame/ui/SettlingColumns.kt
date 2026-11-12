@@ -14,6 +14,11 @@ import kotlin.math.sqrt
  * Units are pixels and seconds; "up" is positive. A stone is identified by its tube
  * and slot index, which is stable for as long as it stays in that tube.
  */
+enum class ContactKind { FLOOR, STONE, OVERHEAD }
+
+/** One audible meeting of a stone with something. [speedSlots] is the closing speed in slots per second. */
+data class StoneContact(val kind: ContactKind, val tube: Int, val speedSlots: Float)
+
 internal class SettlingColumns(
     tubes: Int,
     private val slot: Float,
@@ -31,6 +36,26 @@ internal class SettlingColumns(
     private val gravity = GRAVITY_SLOTS * slot
     private val restSpeed = 0.7f * slot
     private val restGap = 0.01f * slot
+    private val contacts = ArrayList<StoneContact>()
+    private val lids = FloatArray(tubes) { Float.POSITIVE_INFINITY }
+
+    /**
+     * A stone hovering over [tube], still in flight: the tube's top stone may rise at most
+     * [limit] above its resting slot before touching it. Infinity when nothing is overhead.
+     * Without this a stone rebounding out of its tube passed through one waiting to drop in.
+     */
+    fun lid(tube: Int, limit: Float) { lids[tube] = limit.coerceAtLeast(0f) }
+
+    /** Contacts since the last call, in the order they happened. For sound and haptics only. */
+    fun drainContacts(): List<StoneContact> {
+        if (contacts.isEmpty()) return emptyList()
+        return contacts.toList().also { contacts.clear() }
+    }
+
+    private fun report(kind: ContactKind, tube: Int, speed: Float) {
+        // Stones leaning on each other touch every substep; only real knocks are worth hearing.
+        if (speed >= MIN_CONTACT_SLOTS * slot && contacts.size < 64) contacts.add(StoneContact(kind, tube, speed / slot))
+    }
 
     val awake get() = columns.any { it.awake }
     val awakeCount get() = columns.count { it.awake }
@@ -99,23 +124,28 @@ internal class SettlingColumns(
                 if (i == 0) {
                     if (o[0] < 0f) {
                         o[0] = 0f
-                        if (v[0] < 0f) v[0] = -FLOOR_RESTITUTION * v[0]
+                        if (v[0] < 0f) { report(ContactKind.FLOOR, tube, -v[0]); v[0] = -FLOOR_RESTITUTION * v[0] }
                     }
                 } else if (o[i] < o[i - 1]) {
                     o[i] = o[i - 1]
-                    collide(v, i - 1, i)
+                    collide(tube, v, i - 1, i)
                 }
             }
             // Overhead contact, then push that limit back down the stack.
             for (i in n - 1 downTo 0) {
-                val limit = ceiling(tube, i).coerceAtLeast(0f)
+                val fixed = ceiling(tube, i).coerceAtLeast(0f)
+                val stone = if (i == n - 1) lids[tube] else Float.POSITIVE_INFINITY
+                val limit = minOf(fixed, stone)
                 if (o[i] > limit) {
                     o[i] = limit
-                    if (v[i] > 0f) v[i] = -CEILING_RESTITUTION * v[i]
+                    if (v[i] > 0f) {
+                        report(if (stone < fixed) ContactKind.STONE else ContactKind.OVERHEAD, tube, v[i])
+                        v[i] = -(if (stone < fixed) STONE_RESTITUTION * 0.5f else CEILING_RESTITUTION) * v[i]
+                    }
                 }
                 if (i < n - 1 && o[i] > o[i + 1]) {
                     o[i] = o[i + 1]
-                    collide(v, i, i + 1)
+                    collide(tube, v, i, i + 1)
                 }
             }
         }
@@ -130,9 +160,10 @@ internal class SettlingColumns(
     }
 
     /** Equal stones meeting along one line: they trade velocity, losing a little. */
-    private fun collide(v: MutableList<Float>, lower: Int, upper: Int) {
+    private fun collide(tube: Int, v: MutableList<Float>, lower: Int, upper: Int) {
         val closing = v[lower] - v[upper]
         if (closing <= 0f) return
+        report(ContactKind.STONE, tube, closing)
         val mean = (v[lower] + v[upper]) / 2
         v[lower] = mean - STONE_RESTITUTION * closing / 2
         v[upper] = mean + STONE_RESTITUTION * closing / 2
@@ -144,6 +175,8 @@ internal class SettlingColumns(
         const val FLOOR_RESTITUTION = 0.4f
         const val CEILING_RESTITUTION = 0.45f
         const val STONE_RESTITUTION = 0.92f
+        /** Slowest closing speed, in slots per second, that counts as a contact worth reporting. */
+        const val MIN_CONTACT_SLOTS = 2.5f
         private const val SUBSTEP = 0.002f
         private const val MAX_FRAME = 0.05f
 

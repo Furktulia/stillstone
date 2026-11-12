@@ -36,9 +36,12 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
         })[EndlessViewModel::class.java]
     }
     val preferences = remember { context.getSharedPreferences("mode", Context.MODE_PRIVATE) }
+    PlayOptions.load(context.applicationContext) // Reads the saved choice once; later calls do nothing.
     var mode by rememberSaveable { mutableStateOf(preferences.getBoolean("endless", false)) }
     // "challenge" is the earlier two-way preference; it only seeds the first three-way choice.
     var recipe by rememberSaveable { mutableStateOf(preferences.getString("recipe", null) ?: if (preferences.getBoolean("challenge", false)) "C" else "B") }
+    // New Infinite puzzles follow the way of playing that is switched on when they are made.
+    fun newPuzzle(entered: String? = null) = endless.next(recipe.first(), entered, PlayOptions.hiddenColors)
     var browseWorlds by rememberSaveable { mutableStateOf(false) }
     var pickerWorld by rememberSaveable { mutableStateOf<String?>(null) }
     var browserSettings by rememberSaveable { mutableStateOf(false) }
@@ -100,12 +103,12 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                                     game::hint, game::cancelHint, game::chooseLevel, game::settings,
                                     game::dismissRecovery, game::recover),
                                     browse = { openBrowser(null) },
-                                    nextPuzzle = { if (!state.busy) endless.next(recipe.first()) },
+                                    nextPuzzle = { if (!state.busy) newPuzzle() },
                                     extraAction = { menu = true })
                             }
                         } else Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                             if (state.busy) CircularProgressIndicator()
-                            else NightButton("Try another puzzle", onClick = { endless.next(recipe.first()) })
+                            else NightButton("Try another puzzle", onClick = { newPuzzle() })
                         }
                     }
                 }
@@ -125,7 +128,7 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                 { browserSettings = false; browserCompare = true }, { browserSettings = false })
             if (browserCompare) SoundComparison(feedback) { browserCompare = false; browserSettings = true }
         }
-    if (menu) AlertDialog(onDismissRequest = { menu = false }, title = { Text("Infinite play") }, text = {
+    if (menu) NightDialog(onDismissRequest = { menu = false }, title = { Text("Infinite play") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             TextButton(onClick = {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
@@ -144,15 +147,15 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                 "C" -> "Tempting moves can lose the puzzle. Expect to use Undo."
                 else -> "Some choices matter, and a few can be dead ends."
             } + " Applies from the next new puzzle.", style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { endless.next(recipe.first()); menu = false }, enabled = !state.busy) { Text("Skip / new puzzle") }
+            TextButton(onClick = { newPuzzle(); menu = false }, enabled = !state.busy) { Text("Skip / new puzzle") }
             TextButton(onClick = { enter = true; menu = false }) { Text("Enter puzzle code") }
             TextButton(onClick = { bookmark = true; menu = false }, enabled = state.game != null) { Text("Save example") }
             TextButton(onClick = { scope.launch { saved = withContext(Dispatchers.IO) { endless.examples().lines().filter { it.isNotBlank() } } }; menu = false }) { Text("Saved examples") }
             TextButton(onClick = { export.launch("ball-sort-examples.ndjson"); menu = false }) { Text("Export saved examples") }
         }
-    }, confirmButton = { TextButton(onClick = { menu = false }) { Text("Done") } })
+    }, confirmButton = { NightDialogAction("Done", primary = true) { menu = false } })
     saved?.let { examples ->
-        AlertDialog(onDismissRequest = { saved = null }, title = { Text("Saved examples") },
+        NightDialog(onDismissRequest = { saved = null }, title = { Text("Saved examples") },
             text = { androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 400.dp)) {
                 if (examples.isEmpty()) item { Text("No examples saved yet.") }
                 items(examples.size) { index ->
@@ -161,15 +164,15 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                         Text(value.optString("code") + " · " + value.optString("quality") + "\n" + value.optString("note"))
                     }
                 }
-            } }, confirmButton = { TextButton(onClick = { saved = null }) { Text("Done") } })
+            } }, confirmButton = { NightDialogAction("Done", primary = true) { saved = null } })
     }
-    if (enter) AlertDialog(onDismissRequest = { enter = false }, title = { Text("Replay a code") },
+    if (enter) NightDialog(onDismissRequest = { enter = false }, title = { Text("Replay a code") },
         text = { OutlinedTextField(code, { code = it }, label = { Text("For example E2-B-1") }) },
-        confirmButton = { TextButton(onClick = { endless.next(recipe.first(), code); enter = false }) { Text("Load") } },
-        dismissButton = { TextButton(onClick = { enter = false }) { Text("Cancel") } })
-    if (bookmark) AlertDialog(onDismissRequest = { bookmark = false }, title = { Text("Save this example") },
+        confirmButton = { NightDialogAction("Load", primary = true) { newPuzzle(code); enter = false } },
+        dismissButton = { NightDialogAction("Cancel") { enter = false } })
+    if (bookmark) NightDialog(onDismissRequest = { bookmark = false }, title = { Text("Save this example") },
         text = { Column { Text("Hard can be good. Describe what worked or felt wrong."); OutlinedTextField(note, { note = it }, label = { Text("Optional note") }) } },
-        confirmButton = { TextButton(onClick = { endless.bookmark("good", note) { message = it }; bookmark = false; note = "" }) { Text("Good example") } },
-        dismissButton = { TextButton(onClick = { endless.bookmark("needs-work", note) { message = it }; bookmark = false; note = "" }) { Text("Needs work") } })
+        confirmButton = { NightDialogAction("Good example") { endless.bookmark("good", note) { message = it }; bookmark = false; note = "" } },
+        dismissButton = { NightDialogAction("Needs work") { endless.bookmark("needs-work", note) { message = it }; bookmark = false; note = "" } })
     }
 }

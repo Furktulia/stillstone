@@ -26,6 +26,7 @@ class SoundComparisonTest {
                 player.prepare(style) // Gameplay bank, not just the comparison clip.
                 assertTrue("Gameplay bank failed: $style", player.ready)
                 for (count in 1..6) { player.impact(0, style, 0f, count); player.stop() }
+                for (kind in ContactKind.entries) repeat(5) { player.contact(kind, style, 0f, 1.03f); player.stop() }
             }
         } finally { player.release() }
         val base = InstrumentationRegistry.getInstrumentation().targetContext
@@ -53,8 +54,13 @@ class SoundComparisonTest {
             compose.onNodeWithText("Stop").performClick()
             assertNull(context.getSharedPreferences("feedback", 0).getString("style", null))
         }
+        compose.onNodeWithContentDescription("Ceramic").performScrollTo().performClick()
         compose.onNodeWithText("Use Ceramic").performClick()
         compose.onNodeWithText("Selected: Ceramic").assertIsDisplayed()
         assertEquals("CERAMIC", context.getSharedPreferences("feedback", 0).getString("style", null))
+        // Leave nothing behind in the playtest app. The pause lets the asynchronous save finish
+        // first; otherwise it recreates the file just after it is deleted.
+        Thread.sleep(600)
+        base.deleteSharedPreferences(prefix + "feedback")
     }
 }

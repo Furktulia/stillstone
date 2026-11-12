@@ -130,14 +130,14 @@ internal fun runSeedBenchmark(options: Map<String, String>) {
     val count = options.number("count", 100)
     val seed = options.longNumber("seed", 1)
     repeat(20) { runCatching { SeededPuzzle.create(SeededPuzzle.code(900_000L + it, 'B')) } } // Warm up the JIT.
-    for (recipe in "RBC") {
+    for (hidden in listOf(false, true)) for (recipe in "RBC") {
         val millis = ArrayList<Long>()
         val moves = ArrayList<Long>()
         val shapes = HashMap<String, Int>()
         var failed = 0
         repeat(count) { index ->
             val started = System.nanoTime()
-            val level = try { SeededPuzzle.create(SeededPuzzle.code(seed + index, recipe)) } catch (_: IllegalArgumentException) { null }
+            val level = try { SeededPuzzle.create(SeededPuzzle.code(seed + index, recipe, hidden)) } catch (_: IllegalArgumentException) { null }
             millis.add((System.nanoTime() - started) / 1_000_000)
             if (level == null) failed++ else {
                 moves.add(level.solution.size.toLong())
@@ -145,7 +145,7 @@ internal fun runSeedBenchmark(options: Map<String, String>) {
                 shapes[shape] = (shapes[shape] ?: 0) + 1
             }
         }
-        println("E2-$recipe: $failed/$count seeds without a puzzle; ms p50 ${percentile(millis, 50)} p90 ${percentile(millis, 90)} max ${millis.max()}; " +
+        println("${if (hidden) "H1" else "E2"}-$recipe: $failed/$count seeds without a puzzle; ms p50 ${percentile(millis, 50)} p90 ${percentile(millis, 90)} max ${millis.max()}; " +
             "moves p50 ${percentile(moves, 50)} min ${moves.minOrNull()} max ${moves.maxOrNull()}")
         println("  " + shapes.entries.sortedByDescending { it.value }.joinToString { "${it.key}: ${it.value}" })
     }

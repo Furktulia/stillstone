@@ -23,7 +23,6 @@ import kotlinx.coroutines.*
 internal fun SoundComparison(feedback: GameFeedback, dismiss: () -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val manager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val player = remember { StoneAudio() }
     val scope = rememberCoroutineScope()
     var task by remember { mutableStateOf<Job?>(null) }
@@ -41,9 +40,9 @@ internal fun SoundComparison(feedback: GameFeedback, dismiss: () -> Unit) {
         lifecycle.addObserver(observer)
         onDispose { task?.cancel(); lifecycle.removeObserver(observer); player.release() }
     }
-    AlertDialog(onDismissRequest = dismiss, title = { Text("Compare drop sounds") }, text = {
+    NightDialog(onDismissRequest = dismiss, title = { Text("Compare drop sounds") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Three synthetic material studies. Use the same drop and volume to compare their character.")
+            Text("Synthetic material studies. Use the same drop and volume to compare their character.")
             ImpactStyle.entries.forEach { style ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected == style, onClick = { stop(); styleName = style.name },
@@ -75,7 +74,6 @@ internal fun SoundComparison(feedback: GameFeedback, dismiss: () -> Unit) {
                     task = scope.launch {
                         withContext(Dispatchers.IO) { player.prepare(sampleStyle, sampleDeep, sampleCount, preview = true) }
                         if (!player.ready) message = "Audio unavailable on this device."
-                        else if (manager.ringerMode != AudioManager.RINGER_MODE_NORMAL) message = "Switch the phone to normal ringer mode to hear the preview."
                         else if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                             player.impact(0, sampleStyle, volume)
                             message = sampleStyle.title + if (sampleCount == 1) " · single drop" else " · three-ball contact"
@@ -85,10 +83,10 @@ internal fun SoundComparison(feedback: GameFeedback, dismiss: () -> Unit) {
                 TextButton(onClick = { stop() }) { Text("Stop") }
             }
             Text(message, style = MaterialTheme.typography.bodySmall)
-            Text("Preview works even if game sounds are off. Media volume and silent mode still apply. Group clips add quieter contact taps; this is a sound study, not new collision physics.",
+            Text("Preview works even if game sounds are off. Media volume applies; the ringer or vibrate setting does not. Group clips add quieter contact taps; this is a sound study, not new collision physics.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }, confirmButton = {
-        TextButton(onClick = { feedback.style(selected); dismiss() }) { Text("Use ${selected.title}") }
-    }, dismissButton = { TextButton(onClick = dismiss) { Text("Back") } })
+        NightDialogAction("Use ${selected.title}", primary = true) { feedback.style(selected); dismiss() }
+    }, dismissButton = { NightDialogAction("Back", onClick = dismiss) })
 }

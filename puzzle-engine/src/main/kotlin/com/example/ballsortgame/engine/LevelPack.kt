@@ -129,7 +129,9 @@ object LevelPackCodec {
 object BundledLevelPacks {
     fun starter(): LevelPack = read("starter-v1.txt")
     fun previousPlaytest(): LevelPack = read("playtest-v1.txt")
-    fun playtest(): LevelPack = read("playtest-v2.txt")
+    /** The campaign before its relaxed levels were replaced (2026-11-12). Kept for comparison and old tests. */
+    fun playtestV2(): LevelPack = read("playtest-v2.txt")
+    fun playtest(): LevelPack = read("playtest-v3.txt")
     fun difficultyStudy(): LevelPack = read("difficulty-study-v1.txt")
     private fun read(name: String): LevelPack =
         requireNotNull(BundledLevelPacks::class.java.getResourceAsStream("/levels/$name")) {

@@ -66,7 +66,7 @@ button. Subsequent cold launches restore the last campaign or Infinite game.
 
 The browser is a tall scrolling composition of irregular depth entrances, never
 rectangular image cards. Each entrance gets its own row, about 65–75% screen width
-(currently 70%), alternately left/right with moderate gaps. Dusk is not deliberately
+(70% as committed; a 58% soft-edged variant is under review, see next-steps.md), alternately left/right with moderate gaps. Dusk is not deliberately
 larger than the rest. No Worlds heading, Infinite/Endless captions or scrollbar.
 Names appear inside worlds and in accessible descriptions.
 
@@ -125,9 +125,12 @@ Stone labels auto-fit on one line. This new choice still needs creator phone rev
 “app/...” above means app/src/main/java/com/example/ballsortgame/.
 Engine sources are under puzzle-engine/src/main/kotlin/com/example/ballsortgame/engine/.
 
-32 current levels: Dusk (world ID three, capacity 3, 10 levels);
-Moonlight (four, capacity 4, 11); Midnight (five, capacity 5, 11).
-Stable IDs and the earlier boards/certificates are preserved for old saves.
+33 current levels (playtest-v3.txt since 2026-11-12): Dusk (world ID three, capacity 3,
+10 levels); Moonlight (four, capacity 4, 11); Midnight (five, capacity 5, 12).
+The 22 relaxed levels were replaced at the creator's request with longer ones that have no
+losing position; introductions and the six hard levels keep their IDs, boards and
+certificates. See next-steps.md. The table row above still names playtest-v2, now the
+previous pack. Hidden colours (Settings) and H1 Infinite codes are described there too.
 
 Android: Kotlin/Compose, single app plus pure JVM engine module, minSdk 29,
 target/compile 37. AGP 9 built-in Kotlin, existing coroutines/ViewModel/manual
@@ -239,6 +242,8 @@ Instrumentation once removed the real emulator save during cleanup.
 KEEP android.injected.androidTest.leaveApksInstalledAfterRun=true and use
 in-memory/isolated test stores. Never clear real player data to simplify a test.
 Install updates over the app without uninstalling.
+Debug builds use the committed app/playtest-debug.keystore (see README). Do not delete or
+regenerate it: a changed signature forces every tester to uninstall and lose their save.
 
 ## 8. Art and portability
 

@@ -34,12 +34,30 @@ class PlaytestUiTest {
         }
         compose.setContent {
             val state by model.state.collectAsState()
-            BallSortGameTheme { GameScreen(state, model) }
+            // Preferences too: pressing the controls must not mark the real player's
+            // first-time control names as seen, or change their sound settings.
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalContext provides isolated) {
+                BallSortGameTheme { GameScreen(state, model) }
+            }
         }
         compose.waitUntil(5_000) { !model.state.value.loading }
     }
 
-    @After fun stop() { compose.runOnUiThread { owner.clear() } }
+    private val base = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+    private val used = mutableSetOf<String>()
+    private val isolated = object : android.content.ContextWrapper(base) {
+        override fun getSharedPreferences(name: String, mode: Int): android.content.SharedPreferences {
+            used += "ui-test-$name"
+            return base.getSharedPreferences("ui-test-$name", mode)
+        }
+        override fun getApplicationContext() = this
+    }
+
+    @After fun stop() {
+        compose.runOnUiThread { owner.clear() }
+        used.forEach { base.deleteSharedPreferences(it) }
+    }
 
     private fun choose(index: Int) {
         compose.onNodeWithTag("puzzles").performClick()

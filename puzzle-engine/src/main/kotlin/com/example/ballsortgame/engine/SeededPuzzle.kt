@@ -37,11 +37,18 @@ object SeededPuzzle {
 
     fun create(code: String, cancelled: () -> Boolean = { false }): PackLevel {
         val parts = code.trim().uppercase().split("-")
-        require(parts.size == 3 && parts[0] in listOf("E1", "E2")) { "Use a code such as E2-B-seed" }
+        require(parts.size == 3 && parts[0] in listOf("E1", "E2", "H1")) { "Use a code such as E2-B-seed" }
         val seed = requireNotNull(parts[2].toLongOrNull(36)) { "Use a code such as E2-B-seed" }
         require(seed in 0..MAX_SEED)
-        return if (parts[0] == "E1") createE1(parts[1], seed, cancelled) else createE2(parts[1], seed, cancelled)
+        return when (parts[0]) {
+            "E1" -> createE1(parts[1], seed, cancelled)
+            "E2" -> createE2(parts[1], seed, cancelled, hidden = false)
+            else -> createE2(parts[1], seed, cancelled, hidden = true)
+        }
     }
+
+    /** Fewer games than the open measure: these are played on real boards, which costs more per move. */
+    private const val H1_BLIND_TRIALS = 20
 
     private fun createE1(recipe: String, seed: Long, cancelled: () -> Boolean): PackLevel {
         require(recipe in listOf("B", "C")) { "Use E1-B-seed or E1-C-seed" }
@@ -62,7 +69,13 @@ object SeededPuzzle {
             if (challenge) LevelRole.CHALLENGE else LevelRole.REGULAR, seed, false, p.board, p.solution)
     }
 
-    private fun createE2(recipe: String, seed: Long, cancelled: () -> Boolean): PackLevel {
+    /**
+     * [hidden] is the H1 recipe, for play with hidden colours: the same starts, but the tier is
+     * taken from how simple strategies fare when they cannot see buried stones. With one
+     * spare tube about half of the starts that are relaxed in the open stop being relaxed
+     * once colours are hidden, so E2 codes are not reused for that way of playing.
+     */
+    private fun createE2(recipe: String, seed: Long, cancelled: () -> Boolean, hidden: Boolean): PackLevel {
         val (recipes, wanted, role) = when (recipe) {
             "R" -> Triple(relaxed, setOf(PuzzleTier.RELAXED), LevelRole.RELAXED)
             "B" -> Triple(balanced, setOf(PuzzleTier.BALANCED), LevelRole.REGULAR)
@@ -70,6 +83,7 @@ object SeededPuzzle {
             "C" -> Triple(challenge, setOf(PuzzleTier.CHALLENGE, PuzzleTier.EXPERT), LevelRole.CHALLENGE)
             else -> throw IllegalArgumentException("Use E2-R-seed, E2-B-seed or E2-C-seed")
         }
+        val version = if (hidden) "h1" else "e2"
         // java.util.Random's sequence is fixed by its specification; the shuffle is our own.
         // Neighbouring seeds give Random nearly identical first values, so scramble first (SplitMix64).
         var mixed = seed + 0x9E3779B97F4A7C15uL.toLong()
@@ -89,9 +103,18 @@ object SeededPuzzle {
             when (val outcome = PuzzleAnalyzer.analyze(board, E2_MAX_STATES, PuzzleAnalyzer.DEFAULT_BOT_TRIALS, cancelled)) {
                 is AnalysisOutcome.Analyzed -> {
                     val analysis = outcome.analysis
-                    if (analysis.tier in wanted && analysis.solution.size >= chosen.minMoves) {
-                        return PackLevel("endless-e2${recipe.lowercase()}-${seed.toString(36)}", "endless",
-                            role, seed, true, board, analysis.solution)
+                    if (analysis.solution.size >= chosen.minMoves) {
+                        val tier = if (!hidden) analysis.tier
+                            // Hiding colours never makes simple play more successful in any way that
+                            // matters here, so a start that is not relaxed in the open is not tried.
+                            else if (recipe == "R" && analysis.tier != PuzzleTier.RELAXED) null
+                            else {
+                                val solved = HiddenColors.bestBlindSuccesses(board, H1_BLIND_TRIALS, cancelled)
+                                    ?: throw IllegalArgumentException("Puzzle preparation was cancelled")
+                                analysis.tierFor(solved * 100 / H1_BLIND_TRIALS)
+                            }
+                        if (tier in wanted) return PackLevel("endless-$version${recipe.lowercase()}-${seed.toString(36)}",
+                            "endless", role, seed, true, board, analysis.solution)
                     }
                 }
                 AnalysisOutcome.Cancelled -> throw IllegalArgumentException("Puzzle preparation was cancelled")
@@ -105,8 +128,8 @@ object SeededPuzzle {
     fun code(seed: Long, challenge: Boolean) = "E1-${if (challenge) "C" else "B"}-${seed.toString(36).uppercase()}"
 
     /** Current-version code. [recipe] is R, B or C. */
-    fun code(seed: Long, recipe: Char): String {
+    fun code(seed: Long, recipe: Char, hidden: Boolean = false): String {
         require(recipe in "RBC")
-        return "E2-$recipe-${seed.toString(36).uppercase()}"
+        return "${if (hidden) "H1" else "E2"}-$recipe-${seed.toString(36).uppercase()}"
     }
 }

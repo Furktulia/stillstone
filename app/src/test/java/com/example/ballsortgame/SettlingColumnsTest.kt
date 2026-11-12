@@ -35,6 +35,49 @@ class SettlingColumnsTest {
         return frames
     }
 
+    @Test fun contactsNameWhatWasHitGetQuieterAndStopAtRest() {
+        val speed = SettlingColumns.impactSpeed(slot * 0.6f, slot)
+        val columns = SettlingColumns(1, slot)
+        columns.land(0, 1, slot, speed)
+        val alone = mutableListOf<com.example.ballsortgame.ui.StoneContact>()
+        run(columns) { alone += columns.drainContacts() }
+        assertTrue(alone.isNotEmpty() && alone.all { it.kind == com.example.ballsortgame.ui.ContactKind.FLOOR })
+        // Arrival speed plus what gravity adds over the last slot of the fall.
+        assertTrue(alone.first().speedSlots in speed / slot..speed / slot * 1.3f)
+        assertTrue(alone.zipWithNext().all { (earlier, later) -> later.speedSlots < earlier.speedSlots })
+
+        columns.land(0, 2, slot, speed)
+        val onto = mutableListOf<com.example.ballsortgame.ui.StoneContact>()
+        run(columns) { onto += columns.drainContacts() }
+        assertEquals(com.example.ballsortgame.ui.ContactKind.STONE, onto.first().kind)
+        assertTrue(onto.all { it.speedSlots >= SettlingColumns.MIN_CONTACT_SLOTS })
+        repeat(30) { columns.step(frame) }
+        assertTrue("resting stones are silent", columns.drainContacts().isEmpty())
+
+        val low = SettlingColumns(1, slot) { _, _ -> slot * 0.2f }
+        low.land(0, 1, 0f, SettlingColumns.impactSpeed(slot * 2f, slot))
+        val under = mutableListOf<com.example.ballsortgame.ui.StoneContact>()
+        run(low, limit = slot * 0.2f) { under += low.drainContacts() }
+        assertTrue(under.any { it.kind == com.example.ballsortgame.ui.ContactKind.OVERHEAD })
+    }
+
+    /** A stone waiting to drop in must stop one rebounding out of the tube, not be passed through. */
+    @Test fun aStoneHoveringOverTheTubeStopsTheReboundBelowIt() {
+        val speed = SettlingColumns.impactSpeed(slot * 4f, slot)
+        val free = SettlingColumns(1, slot)
+        free.land(0, 1, 0f, speed)
+        var highest = 0f
+        run(free, maxSeconds = 8f) { highest = maxOf(highest, free.offset(0, 0)) }
+        assertTrue("fixture must rebound well past the lid", highest > slot * 3f)
+
+        val covered = SettlingColumns(1, slot)
+        covered.lid(0, slot * 1.5f)
+        covered.land(0, 1, 0f, speed)
+        val contacts = mutableListOf<com.example.ballsortgame.ui.StoneContact>()
+        run(covered, maxSeconds = 8f, limit = slot * 1.5f) { contacts += covered.drainContacts() }
+        assertTrue(contacts.any { it.kind == com.example.ballsortgame.ui.ContactKind.STONE })
+    }
+
     @Test fun singleStoneReboundsToTheIntendedHeightAndComesToRest() {
         val columns = SettlingColumns(1, slot)
         val height = slot * 1.2f

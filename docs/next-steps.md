@@ -4,6 +4,134 @@ This is the current queue; product-plan.md is the original planning snapshot,
 not a record of everything still missing. Optional ideas below are not promises
 to include them in the first release.
 
+## Creator feedback 2026-11-11 (after playing campaign and Infinite)
+
+- **Tier labels match their experience.** Direction: most campaign levels should be RELAXED.
+  Less experienced players find even BALANCED hard until they have played for an hour or so.
+  Harder levels are the exception, placed late or as optional branches, never the default.
+- **World browser:** the entrance pictures "do not belong". Exploration in the working tree
+  (not yet approved): entrances at 58% of width instead of 70%, and their silhouette edge
+  dissolves into the mist (WorldArtwork.ENTRANCE_FEATHER, computed once when the art loads;
+  source images unchanged). The creator likes this "much more" (emulator); phone review open.
+- **Sound and haptics reported as not working.** Measured on the emulator: the impact clip
+  does play on every landing, but at about -35 dB (media volume 5/15 plus a quiet clip).
+  Sound is also skipped whenever the phone's ringer is on vibrate or silent, and haptics
+  are off by default and use the system key-press effect, which many phones disable.
+  The creator's phone was not on silent and has key-press vibration disabled (as they
+  expect most players do). Earlier builds were already "really quiet" to them.
+  Done since: clips are about 5 dB louder (ImpactSounds.LEVEL, rounded limiter) and
+  playback volume is 0.75–1.0 instead of 0.55–0.9. A fourth comparison style, River stone,
+  adds a bright clack to the Pebble body, because phone speakers reproduce little of
+  Pebble's 185 Hz. Nobody has listened to either change yet; default style is still Pebble.
+  Built 2026-11-11, unheard: SettlingColumns reports every contact above 2.5 slots/s as
+  FLOOR, STONE or OVERHEAD with its closing speed. GameFeedback plays one short voice per
+  contact (ImpactSounds.renderContact: lower tock, bright clack, lighter high tap, all derived
+  from the chosen style), volume from speed (contactVolume), at most one voice per kind every
+  35 ms, playback rate varied by ±4%. The old whole-landing clip now plays only with Reduced
+  motion and in the sound comparison, which therefore does not preview contact voices.
+  Gentle haptics is an explicit PRIMITIVE_TICK at 0.25–0.55 strength (8 ms one-shot fallback)
+  on each landing, usage MEDIA, so it no longer depends on the touch-vibration setting; still
+  off by default, and switching it on plays one tick. VIBRATE permission added.
+  Creator verdict 2026-11-12 (phone): "the sounds and vibrations are good."
+  The ringer-mode check was the reason they heard nothing earlier: their phone is always on
+  vibrate and they listen through earphones. It is removed; game sound now follows media
+  volume and the Stone sounds switch only.
+- **Stones passing through each other in flight** (E2-B-11MK1N5UER: tube 2 to 5, then 4 to 5).
+  Cause: the later, shorter group waits directly above tube 5, which is on the earlier
+  group's path down the aisle. Assessment: physical collisions in flight are not worth it;
+  a yield rule is (a later group holds short of an earlier group's remaining route, never
+  the reverse, so nothing can deadlock, and if two groups already overlap it does nothing).
+  Built 2026-11-12 (GroupRoute.claimed / entersClaimedSpace, stepped approach in
+  PuzzleBoard): a group bound for the same tube keeps its whole remaining route clear;
+  any other earlier group claims its body plus four slots ahead. A held group eases off
+  and resumes; it never waits more than 2.5 s in total. The final fall is not covered.
+  First version still failed on the creator's example: the held stone sat exactly at the
+  edge of the claimed space, sample points shifted as the first stone moved, the held stone
+  then counted as "already inside" and was let through. Fixed by measuring to the route
+  line itself and requiring "already inside" to mean well inside (0.7 slot). Confirmed on
+  the emulator with E2-B-11MK1N5UER: the stone from tube 4 waits beside the aisle.
+  A stone falling onto one that is rebounding up out of the tube now allows for the rising
+  stone's speed, so the two are not drawn overlapping for a frame.
+  River stone is the default sound for players who never chose one (creator's request).
+  Third cause found by logging every drawn stone position per frame: after a long drop the
+  first stone rebounds about five slots, out of its tube, and went through the second
+  stone still hovering above waiting to drop. SettlingColumns.lid(tube, limit) now makes
+  any stone in flight over a tube solid to that tube's top stone (stones lifting out of the
+  same tube are ignored). A falling stone is also handed to the settling motion one frame
+  before contact instead of being caught inside the stone below. On the example the log
+  went from 8 overlapping frames to 0. To repeat that check, log stone centres from the
+  board's draw pass and flag any pair closer than 0.97 of a slot.
+  Needs the creator's eye for pacing. The approach no longer uses a Compose tween, so it
+  ignores the system animation scale by construction.
+
+## Battery audit (2026-11-12, emulator only)
+
+Measured with dumpsys gfxinfo / top / power on the debug build:
+- Idle on the game screen (with and without a selected tube), the level grid and the world
+  browser: 0 frames drawn in 6–8 s and 0% CPU. No animation loop runs while nothing moves.
+- No wake lock is held and no audio track stays active after a sound finishes.
+- Work happens only while stones move, while the world list scrolls, during a hint search
+  and while Infinite prepares its next puzzles (foreground only).
+- The one costly spot is scrolling the world browser: about 30 ms per frame on the emulator
+  (mist layer, erase masks and gradients redrawn each frame). Brief, and unmeasured on a
+  phone. Caching the static backdrop would be the fix if a phone shows dropped frames.
+No change was needed. A real figure needs a release build on a phone (Android's battery
+usage screen, or Android Studio's energy profiler) over a long session.
+
+## Hidden colours and the refreshed campaign (2026-11-12, awaiting review)
+
+**Hidden colours** (Settings → Hidden colors, off by default, applies to every puzzle).
+Only a tube's top stone shows its colour; a stone is revealed the first time it is on top
+and stays revealed, including after Undo and Restart. Moving rules are unchanged, so a
+move still carries every matching stone under the top one, seen or not. Unseen stones are
+always the bottom ones of a tube: their number is one less than the smallest size the tube
+has had (engine/HiddenColors.kt), so nothing new is saved. Hints still use full knowledge.
+
+Does it make puzzles harder? Measured with the four simple strategies, with and without
+sight of buried stones (`hidden-study`, 120 shuffles per recipe):
+- two spare tubes: no difference. 1,077 of 1,080 starts that are relaxed in the open stay relaxed.
+- one spare tube: clearly harder. Starts that are relaxed in the open are solved 66–90% of
+  the time blind instead of ~100%, and roughly a third to a half of them stop being relaxed.
+- shipped example: Moonlight 10 is solved 100% in the open and 27% blind.
+So the E2 Infinite recipe is not reused. H1 codes (H1-R / H1-B / H1-C) use the same starts
+but take the tier from the blind success rate (20 games per strategy). New Infinite puzzles
+are H1 while the setting is on. PC timing: about 25 ms per puzzle against 3 ms for E2; not
+measured on a phone. E1 and E2 codes are unchanged.
+Limits: bot success is not a human rating, and the reveal happens when a move is made,
+which can be a moment before the covering stones visibly lift.
+
+**Campaign refresh** (playtest-v3.txt; playtest-v2.txt kept for reference and tests).
+The creator asked for the relaxed levels to be redone as longer but still safe, keeping the
+later medium and hard ones. 22 relaxed levels were replaced with new ones ("-calm-" IDs)
+from `relaxed-campaign`, each with NO losing position anywhere in its state graph, solved
+100% by simple play in the open and blind, and ordered by length within its world:
+Dusk 6–13 moves (was 3–8), Moonlight 7–16 (was 7–13), Midnight 8–18 (was 7–16).
+Kept unchanged: the five introductions and the six hard levels, which now close each
+world (Midnight's former level 7 moved to the end group). Dusk 10, Moonlight 11, Midnight
+10–12. 33 levels: 10 / 11 / 12.
+Saves: progress on a replaced level is dropped with the existing "incompatible saved
+puzzle was reset" notice; completed marks for kept levels survive.
+Shortest solutions cannot grow much further with at most five colours and two spare
+tubes; longer relaxed levels would need more colours or larger tubes (a product decision).
+Not yet played by a person.
+
+## Quiet controls and game-styled dialogs (2026-11-12, awaiting review)
+
+A friend who playtested found the Undo / Restart / Hint stone buttons distracting.
+- They are now QuietControl (NightUi.kt): thin outline icons at about 60% brightness, no
+  surface, one row. Stone buttons remain for navigation (back, Resume, Next puzzle).
+- ControlIntro.kt: each control shows its name underneath until it has been used once;
+  any names left retire after three solved puzzles. Holding a control shows its name for
+  about two seconds at any time. Stored in the "onboarding" preferences, not the save.
+- Every dialog uses NightDialog instead of Material's AlertDialog: settings, restart
+  confirmation, the "A way back" recovery tip, sound comparison, and the four Infinite
+  dialogs (options, saved examples, enter code, save example). Switches use NightSwitch.
+- Still stock Material inside those panels: the Infinite options list, filter chips,
+  radio buttons, slider, text fields and progress bars. The "⋯" Infinite button and the
+  "Tap a tube to begin." status line are unchanged.
+- PlaytestUiTest and SoundComparisonTest use prefixed preferences and delete them, so
+  running the emulator tests no longer changes the real app's name hints or settings.
+
 ## Continuous settling: implemented, awaiting phone review
 
 ui/SettlingColumns.kt gives every standing stone its own vertical displacement and

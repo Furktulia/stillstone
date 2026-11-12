@@ -67,6 +67,50 @@ class GroupRouteTest {
         }
     }
 
+    /** The creator's example E2-B-11MK1N5UER: tube 2 to 5, then at once tube 4 to 5. */
+    @Test fun laterGroupHoldsShortOfAnEarlierGroupBoundForTheSameTubeAndThenArrives() {
+        val width = 372f; val height = 560f
+        val layout = boardGeometry(List(5) { 3 }, width, height, 1f)
+        val slot = layout.first().slot
+        val first = GroupRoute(requireNotNull(stoneRoute(layout, 1, 4, 2, 0, width, height, 1f)), 1, slot)
+        val second = GroupRoute(requireNotNull(stoneRoute(layout, 3, 4, 2, 1, width, height, 1f)), 1, slot)
+        // Without the rule the second, shorter route waits above tube 5, on the first one's way down.
+        val waiting = second.at(second.releaseFraction)
+        assertTrue((0..200).any { first.at(it / 200f).first().distance(waiting.first()) < slot * 0.5f })
+
+        // Many frame rates and speeds: an earlier version let the held stone through when the
+        // first stone's movement nudged it from "at the edge" to "already inside".
+        for (theirSteps in listOf(90, 137, 200, 333, 611)) for (mySteps in listOf(23, 60, 97, 250)) {
+            var mine = 0f
+            var held = 0
+            for (step in 0..theirSteps + mySteps + 5) {
+                val theirs = (step / theirSteps.toFloat()).coerceAtMost(1f)
+                val landed = theirs >= 1f
+                val next = minOf(second.releaseFraction, mine + second.releaseFraction / mySteps)
+                val blocked = !landed && entersClaimedSpace(second.at(mine), second.at(next),
+                    first.claimed(theirs, Float.POSITIVE_INFINITY), slot)
+                if (blocked) held++ else mine = next
+                if (!landed) assertTrue("stones overlap at step $step ($theirSteps/$mySteps)",
+                    first.at(theirs).first().distance(second.at(mine).first()) >= slot * 0.9f)
+            }
+            // A slow second stone behind a fast first one has nothing to wait for.
+            if (mySteps * 2 < theirSteps) assertTrue("the later group never had to wait ($theirSteps/$mySteps)", held > 0)
+            assertEquals("the later group must still arrive", second.releaseFraction, mine, 0.0001f)
+        }
+    }
+
+    @Test fun aGroupAlreadyInTheWayIsNotHeldAndFarCrossingsAreNotClaimed() {
+        val layout = boardGeometry(List(5) { 3 }, 372f, 560f, 1f)
+        val slot = layout.first().slot
+        val route = GroupRoute(requireNotNull(stoneRoute(layout, 1, 4, 2, 0, 372f, 560f, 1f)), 1, slot)
+        val onPath = route.at(0.6f)
+        assertFalse(entersClaimedSpace(onPath, onPath, route.claimed(0.2f, Float.POSITIVE_INFINITY), slot))
+        val nearEnd = route.at(1f)
+        val away = listOf(FlightPoint(nearEnd.first().x + slot * 3, nearEnd.first().y))
+        assertTrue(entersClaimedSpace(away, nearEnd, route.claimed(0f, Float.POSITIVE_INFINITY), slot))
+        assertFalse(entersClaimedSpace(away, nearEnd, route.claimed(0f, slot), slot))
+    }
+
     @Test fun descentIncludesAisleHeightAcrossHorizontalTurnsAndBounceCanClearOwnRim() {
         val path = StoneRoute(listOf(FlightPoint(0f, 200f), FlightPoint(0f, 0f),
             FlightPoint(100f, 0f), FlightPoint(100f, 100f), FlightPoint(200f, 100f), FlightPoint(200f, 300f)), 0f)

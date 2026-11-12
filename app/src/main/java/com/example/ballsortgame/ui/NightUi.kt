@@ -3,6 +3,13 @@ package com.example.ballsortgame.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -88,6 +95,92 @@ internal fun SettingsButton(onClick: () -> Unit, modifier: Modifier = Modifier) 
             drawCircle(color, size.minDimension * .14f, center, style = Stroke(1.4.dp.toPx()))
         }
     }
+}
+
+/**
+ * A play control that stays out of the way: a thin outline icon, dimmer than the stones,
+ * with no surface of its own. Its name sits underneath and is normally invisible; it shows
+ * while [showName] is set (a player's first puzzles) and for a moment after a long press.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+internal fun QuietControl(symbol: NightSymbol, name: String, modifier: Modifier = Modifier, enabled: Boolean = true,
+    showName: Boolean = false, onClick: () -> Unit) {
+    val look = LocalWorldLook.current
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    var held by remember { mutableStateOf(false) }
+    LaunchedEffect(held) { if (held) { kotlinx.coroutines.delay(1800); held = false } }
+    val nameAlpha by animateFloatAsState(if (showName || held) 1f else 0f, tween(220), label = "control name")
+    val tint by animateFloatAsState(if (!enabled) .22f else if (pressed) 1f else .62f, tween(120), label = "control tint")
+    Column(modifier.heightIn(min = 56.dp)
+        .semantics(mergeDescendants = true) { contentDescription = name }
+        .combinedClickable(enabled = enabled, role = Role.Button, interactionSource = source, indication = null,
+            onLongClickLabel = "Show name", onLongClick = { held = true }, onClick = onClick)
+        .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        NightIcon(symbol, Modifier.size(24.dp), look.light.copy(alpha = tint))
+        Spacer(Modifier.height(5.dp))
+        // Always laid out so the row never jumps when a name appears.
+        BasicText(name, Modifier.clearAndSetSemantics { }, style = MaterialTheme.typography.labelMedium.copy(
+            color = look.light.copy(alpha = .78f * nameAlpha * if (enabled) 1f else .55f)), maxLines = 1, softWrap = false)
+    }
+}
+
+/** The game's own dialog panel: night-coloured, softly lit from one corner, display-serif title. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun NightDialog(onDismissRequest: () -> Unit, title: @Composable () -> Unit, text: @Composable () -> Unit,
+    confirmButton: @Composable () -> Unit, dismissButton: (@Composable () -> Unit)? = null) {
+    val look = LocalWorldLook.current
+    androidx.compose.ui.window.Dialog(onDismissRequest) {
+        val shape = androidx.compose.foundation.shape.RoundedCornerShape(26.dp)
+        Column(Modifier.fillMaxWidth().widthIn(max = 420.dp).clip(shape)
+            .background(Brush.verticalGradient(listOf(lerp(look.base, look.light, .15f), lerp(look.base, look.light, .07f))))
+            .drawBehind {
+                drawRect(Brush.radialGradient(listOf(look.accent.copy(alpha = .14f), Color.Transparent),
+                    center = Offset(size.width * .82f, 0f), radius = size.width * .95f))
+            }
+            .border(1.dp, look.accent.copy(alpha = .28f), shape)
+            .padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = 12.dp)) {
+            CompositionLocalProvider(LocalContentColor provides look.light) {
+                ProvideTextStyle(MaterialTheme.typography.headlineSmall, title)
+            }
+            Spacer(Modifier.height(14.dp))
+            Box(Modifier.weight(1f, fill = false)) {
+                CompositionLocalProvider(LocalContentColor provides lerp(look.light, look.tube, .22f)) {
+                    ProvideTextStyle(MaterialTheme.typography.bodyMedium, text)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                itemVerticalAlignment = Alignment.CenterVertically) {
+                dismissButton?.invoke()
+                confirmButton()
+            }
+        }
+    }
+}
+
+/** A dialog choice. The [primary] one is a small stone; the others are quiet lettering. */
+@Composable
+internal fun NightDialogAction(label: String, modifier: Modifier = Modifier, primary: Boolean = false,
+    enabled: Boolean = true, onClick: () -> Unit) {
+    if (primary) NightButton(label, modifier.widthIn(min = 112.dp), enabled = enabled, onClick = onClick)
+    else Box(modifier.heightIn(min = 48.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+        .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center) {
+        Text(label, fontFamily = GameDisplayFont, style = MaterialTheme.typography.titleMedium,
+            color = LocalWorldLook.current.light.copy(alpha = if (enabled) .82f else .3f), maxLines = 1)
+    }
+}
+
+@Composable
+internal fun NightSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val look = LocalWorldLook.current
+    Switch(checked, onCheckedChange, modifier, colors = SwitchDefaults.colors(
+        checkedThumbColor = look.base, checkedTrackColor = look.accent, checkedBorderColor = look.accent,
+        uncheckedThumbColor = look.tube, uncheckedTrackColor = Color.Transparent, uncheckedBorderColor = look.tube))
 }
 
 @Composable

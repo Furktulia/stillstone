@@ -21,6 +21,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Debug builds are signed with a key kept in the project, not the one Android Studio
+    // creates per machine in ~/.android. Android only updates an installed app when the
+    // signature matches, so a per-machine key made playtest phones refuse new builds
+    // (and lose their saves on reinstall) whenever Android Studio was set up again.
+    // This is a debug key with the standard public password; never use it for a release.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("playtest-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             optimization {
