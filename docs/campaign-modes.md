@@ -75,3 +75,42 @@ lint, and all 26 emulator tests. Seen on the emulator: the Dusk list sections, a
 level each of mixed, sealed (two seals), connected and pattern; one pattern move made.
 Not done: a full playthrough of any mode level by hand, Moonlight/Midnight mode levels on
 screen, compact screens or large text, any phone.
+
+## Classic expansion (2026-11-13): playtest-v6
+
+The creator's direction: the game is still primarily ball sort, so plain sorting levels
+must dominate in number, with hidden colours as an occasional modifier.
+
+`playtest-v6.txt` is the current campaign (`BundledLevelPacks.playtest()`): 236 levels,
+156 plain sorting and 80 mode levels (Dusk 79, Moonlight 79, Midnight 78). Every v5 level
+is unchanged under its ID and in the same relative order, so saved progress carries over;
+only level numbers shift. `playtest-v5.txt` stays as `playtestV5()` for comparison.
+
+Added per world by the `classic-expansion` lab command (ClassicExpansion.kt):
+- 24 calm levels: no position from which the level is lost, simple play finishes at
+  least 95% of the time, and at least 90% without sight of buried stones. IDs `*-calm-*`.
+  Four of them per world carry the hidden-colours rule (now 8 hidden classics per world).
+- 6 steadier levels (tier BALANCED, simple play finishes at least half the time),
+  role REGULAR, IDs `*-steady-*`.
+- 2 optional challenges (tier CHALLENGE), role CHALLENGE, IDs `*-peak-*`.
+Boards use up to six colours with three- and four-slot tubes, so later levels have more
+to sort. New levels are woven into each run: calm ones by rising length through the whole
+run, steadier ones from the first third on, challenges late and never three in a row.
+
+```
+.\gradlew.bat :puzzle-engine:run --args="classic-expansion --output build/puzzle-lab/my-classic"
+```
+It writes the complete pack (playtest-v6.txt), added.csv and parameters.txt, and took
+about 14 minutes on the development PC with the defaults (seed 160000, 1200 attempts per
+world). These measurements describe simple strategies, not human difficulty; none of the
+new levels has been playtested by a person yet.
+
+## Modes tried and dropped (2026-11-13)
+
+Home tubes, the pile, a covered tube and long stones each got one test level. The creator
+played them and rejected the pile, the covered tube and long stones outright ("no point
+in them"). Home tubes was dropped too: with a goal-only rule a colour can be gathered
+anywhere and then moved home in one group move, so it does not change how a level is
+played; making home tubes refuse other colours only removes spare tubes, which is a
+harder plain level, not a new idea. All four were removed from the code. Do not rebuild
+them without a rule that changes strategy.

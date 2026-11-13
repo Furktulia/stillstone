@@ -138,8 +138,10 @@ object BundledLevelPacks {
     fun playtestV2(): LevelPack = read("playtest-v2.txt")
     /** The classic campaign alone, before the mode levels were added (2026-11-12). */
     fun playtestV3(): LevelPack = read("playtest-v3.txt")
-    /** The classic campaign plus four optional mode sections per world. */
-    fun playtest(): LevelPack = read("playtest-v5.txt")
+    /** The campaign with four optional modes woven into each world's run (2026-11-12). */
+    fun playtestV5(): LevelPack = read("playtest-v5.txt")
+    /** The current campaign: v5 unchanged, with many more plain sorting levels woven in (2026-11-13). */
+    fun playtest(): LevelPack = read("playtest-v6.txt")
     fun difficultyStudy(): LevelPack = read("difficulty-study-v1.txt")
     private fun read(name: String): LevelPack =
         requireNotNull(BundledLevelPacks::class.java.getResourceAsStream("/levels/$name")) {

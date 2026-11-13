@@ -15,7 +15,12 @@ class LevelPackTest {
     @Test fun roundTripPreservesBoardsCertificatesMetadataAndOrder() {
         val pack = BundledLevelPacks.playtest()
         assertEquals(pack, LevelPackCodec.decode(LevelPackCodec.encode(pack)))
-        assertEquals(140, pack.levels.size)
+        assertEquals(236, pack.levels.size)
+        // Plain sorting is what the game is: those levels clearly outnumber the mode levels.
+        assertTrue(pack.levels.count { it.mode == LevelMode.CLASSIC } >= 1.9 * pack.levels.count { it.mode != LevelMode.CLASSIC })
+        // The previous campaign is all still there, unchanged and in the same order; new levels are woven between.
+        val previous = BundledLevelPacks.playtestV5().levels
+        assertEquals(previous, pack.levels.filter { it.id in previous.map { p -> p.id }.toSet() })
         assertEquals(listOf("three", "four", "five"), pack.worlds.map { it.id })
         val classic = pack.levels.filter { it.mode == LevelMode.CLASSIC }
         // The same boards as the classic pack; a few are additionally played with hidden colours.
@@ -40,33 +45,37 @@ class LevelPackTest {
             assertTrue(world.id, firsts.zipWithNext().all { (a, b) -> b - a >= 2 })
         }
         val hidden = classic.filter { it.rules.hidden }
-        assertEquals(listOf(4, 4, 4), pack.worlds.map { w -> hidden.count { it.worldId == w.id } })
+        assertEquals(listOf(8, 8, 8), pack.worlds.map { w -> hidden.count { it.worldId == w.id } })
         // Hidden colours also turns up once in each mixed, sealed and connected section, never in a pattern.
         val hiddenModes = pack.levels.filter { it.rules.hidden && it.mode != LevelMode.CLASSIC }
         assertEquals(9, hiddenModes.size)
         assertTrue(hiddenModes.none { it.mode == LevelMode.PATTERN || it.role == LevelRole.CHALLENGE })
-        // The added classic levels: calm ones with no dead end, and two gentler-than-hard ones per world.
+        // The added classic levels: calm ones with no dead end, some steadier ones, and two optional challenges per world.
         val added = classic.filter { it.id !in earlierIds }
-        assertEquals(27, added.size)
+        assertEquals(27 + 96, added.size)
         for (level in added) {
             val analysis = (PuzzleAnalyzer.analyze(level.board, botTrials = 100) as AnalysisOutcome.Analyzed).analysis
             assertEquals(level.id, level.solution.size, analysis.solution.size)
             if (level.role == LevelRole.RELAXED) {
                 assertEquals(level.id, 0, analysis.losingStates)
                 assertEquals(level.id, PuzzleTier.RELAXED, analysis.tier)
+            } else if (level.role == LevelRole.CHALLENGE) {
+                assertTrue(level.id, "-peak-" in level.id)
+                assertEquals(level.id, PuzzleTier.CHALLENGE, analysis.tier)
             } else {
                 assertEquals(level.id, LevelRole.REGULAR, level.role)
                 assertEquals(level.id, PuzzleTier.BALANCED, analysis.tier)
                 assertTrue(level.id, analysis.bestBotPercent >= 50)
             }
         }
-        assertEquals(6, added.count { it.role == LevelRole.REGULAR })
+        assertEquals(6 + 18, added.count { it.role == LevelRole.REGULAR })
+        assertEquals(6, added.count { it.role == LevelRole.CHALLENGE })
         for (level in hidden) {
             assertTrue(level.id, level.rules.isClassic && level.role == LevelRole.RELAXED)
             // Chosen from levels that simple play still solves without seeing the buried stones.
             assertTrue(level.id, requireNotNull(HiddenColors.bestBlindSuccesses(level.board, 100)) >= 90)
         }
-        assertEquals(listOf(19, 19, 22), pack.worlds.map { w -> classic.count { it.worldId == w.id } })
+        assertEquals(listOf(51, 51, 54), pack.worlds.map { w -> classic.count { it.worldId == w.id } })
         // Four optional mode sections in every world: seven levels each, six with the largest tubes.
         for (mode in listOf(LevelMode.MIXED, LevelMode.SEALED, LevelMode.CONNECTED, LevelMode.PATTERN))
             assertEquals(mode.name, listOf(7, 7, 6), pack.worlds.map { w -> pack.levels.count { it.worldId == w.id && it.mode == mode } })
