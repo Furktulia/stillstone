@@ -8,12 +8,12 @@ class GameSessionTest {
     private val levels = LevelCatalog.levels
 
     @Test fun everyBundledPuzzleCanBePlayedAndUndoneThroughItsCertificate() {
-        assertEquals(33, levels.size)
+        assertEquals(140, levels.size)
         for (level in levels) {
             val session = GameSession(levels)
             session.chooseLevel(level.id)
             for (move in level.solution) assertTrue(session.move(move))
-            assertTrue(level.id, session.board.isSolved)
+            assertTrue(level.id, session.solved)
             assertTrue(level.id in session.progress.completed)
             assertFalse(session.move(Move(0, 1)))
             repeat(level.solution.size) { assertTrue(session.undo()) }

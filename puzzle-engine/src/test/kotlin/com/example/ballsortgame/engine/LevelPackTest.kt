@@ -15,13 +15,65 @@ class LevelPackTest {
     @Test fun roundTripPreservesBoardsCertificatesMetadataAndOrder() {
         val pack = BundledLevelPacks.playtest()
         assertEquals(pack, LevelPackCodec.decode(LevelPackCodec.encode(pack)))
-        assertEquals(33, pack.levels.size)
+        assertEquals(140, pack.levels.size)
         assertEquals(listOf("three", "four", "five"), pack.worlds.map { it.id })
-        assertEquals(listOf(10, 11, 12), pack.worlds.map { w -> pack.levels.count { it.worldId == w.id } })
+        val classic = pack.levels.filter { it.mode == LevelMode.CLASSIC }
+        // The same boards as the classic pack; a few are additionally played with hidden colours.
+        // Every level of the earlier classic campaign is still there, unchanged. The order is no longer
+        // by section: each world is one run that rises in difficulty, with the hard levels spread through it.
+        val earlier = BundledLevelPacks.playtestV3().levels
+        val earlierIds = earlier.map { it.id }.toSet()
+        assertEquals(earlier.toSet(), classic.filter { it.id in earlierIds }.map { it.copy(rules = LevelRules.CLASSIC) }.toSet())
+        for (world in pack.worlds) {
+            val run = pack.levels.filter { it.worldId == world.id }
+            assertEquals(world.id, LevelRole.INTRODUCTION, run.first().role)
+            assertEquals(world.id, LevelRole.CHALLENGE, run.last().role)
+            // No hard level in the opening stretch, and never two worlds' worth of them in a row.
+            assertTrue(world.id, run.take(8).none { it.role == LevelRole.CHALLENGE })
+            assertTrue(world.id, run.windowed(3).none { w -> w.all { it.role == LevelRole.CHALLENGE } })
+            // A mode is introduced by its gentlest level before any other level of that mode.
+            for (mode in listOf(LevelMode.MIXED, LevelMode.SEALED, LevelMode.CONNECTED, LevelMode.PATTERN))
+                assertEquals("${world.id} $mode", LevelRole.RELAXED, run.first { it.mode == mode }.role)
+            // Modes arrive one at a time, not all at once.
+            val firsts = listOf(LevelMode.MIXED, LevelMode.SEALED, LevelMode.CONNECTED, LevelMode.PATTERN).map { mode -> run.indexOfFirst { it.mode == mode } }
+            assertEquals(world.id, firsts.sorted(), firsts)
+            assertTrue(world.id, firsts.zipWithNext().all { (a, b) -> b - a >= 2 })
+        }
+        val hidden = classic.filter { it.rules.hidden }
+        assertEquals(listOf(4, 4, 4), pack.worlds.map { w -> hidden.count { it.worldId == w.id } })
+        // Hidden colours also turns up once in each mixed, sealed and connected section, never in a pattern.
+        val hiddenModes = pack.levels.filter { it.rules.hidden && it.mode != LevelMode.CLASSIC }
+        assertEquals(9, hiddenModes.size)
+        assertTrue(hiddenModes.none { it.mode == LevelMode.PATTERN || it.role == LevelRole.CHALLENGE })
+        // The added classic levels: calm ones with no dead end, and two gentler-than-hard ones per world.
+        val added = classic.filter { it.id !in earlierIds }
+        assertEquals(27, added.size)
+        for (level in added) {
+            val analysis = (PuzzleAnalyzer.analyze(level.board, botTrials = 100) as AnalysisOutcome.Analyzed).analysis
+            assertEquals(level.id, level.solution.size, analysis.solution.size)
+            if (level.role == LevelRole.RELAXED) {
+                assertEquals(level.id, 0, analysis.losingStates)
+                assertEquals(level.id, PuzzleTier.RELAXED, analysis.tier)
+            } else {
+                assertEquals(level.id, LevelRole.REGULAR, level.role)
+                assertEquals(level.id, PuzzleTier.BALANCED, analysis.tier)
+                assertTrue(level.id, analysis.bestBotPercent >= 50)
+            }
+        }
+        assertEquals(6, added.count { it.role == LevelRole.REGULAR })
+        for (level in hidden) {
+            assertTrue(level.id, level.rules.isClassic && level.role == LevelRole.RELAXED)
+            // Chosen from levels that simple play still solves without seeing the buried stones.
+            assertTrue(level.id, requireNotNull(HiddenColors.bestBlindSuccesses(level.board, 100)) >= 90)
+        }
+        assertEquals(listOf(19, 19, 22), pack.worlds.map { w -> classic.count { it.worldId == w.id } })
+        // Four optional mode sections in every world: seven levels each, six with the largest tubes.
+        for (mode in listOf(LevelMode.MIXED, LevelMode.SEALED, LevelMode.CONNECTED, LevelMode.PATTERN))
+            assertEquals(mode.name, listOf(7, 7, 6), pack.worlds.map { w -> pack.levels.count { it.worldId == w.id && it.mode == mode } })
     }
 
     @Test fun everyBundledCertificateHasTheClaimedShortestLength() {
-        for (level in BundledLevelPacks.playtest().levels) {
+        for (level in BundledLevelPacks.playtest().levels.filter { it.rules.isClassic }) {
             val solved = PuzzleSolver().solve(level.board, limits) as? SolveResult.Solved
             assertNotNull(level.id, solved)
             assertTrue(level.id, level.shortestProven)
@@ -37,7 +89,7 @@ class LevelPackTest {
      */
     @Test fun levelsCarriedOverFromTheEarlierCampaignKeepTheirBoardsCertificatesAndIds() {
         val earlier = BundledLevelPacks.playtestV2().levels.associateBy { it.id }
-        val current = BundledLevelPacks.playtest().levels
+        val current = BundledLevelPacks.playtestV3().levels
         val kept = current.filter { it.id in earlier }
         for (level in kept) assertEquals(level, earlier[level.id])
         assertEquals(listOf(
@@ -55,7 +107,7 @@ class LevelPackTest {
 
     @Test fun replacementLevelsCannotGetStuckStayRelaxedWithHiddenColorsAndGrowLonger() {
         val earlier = BundledLevelPacks.playtestV2().levels.map { it.id }.toSet()
-        val fresh = BundledLevelPacks.playtest().levels.filter { it.id !in earlier }
+        val fresh = BundledLevelPacks.playtestV3().levels.filter { it.id !in earlier }
         assertEquals(22, fresh.size)
         for (level in fresh) {
             assertTrue(level.id, "-calm-" in level.id)
@@ -72,15 +124,37 @@ class LevelPackTest {
         }
     }
 
+    /** Every mode level is replayed and re-solved under its own rules: the certificate is real and shortest. */
+    @Test fun modeLevelsAreSolvableShortestAndSmallEnoughForPhoneHints() {
+        val levels = BundledLevelPacks.playtest().levels.filter { it.mode != LevelMode.CLASSIC }
+        assertEquals(80, levels.size)
+        for (level in levels) {
+            level.rules.check(level.board)
+            val solved = RuledSolver.solve(level.rules, level.rules.start(level.board), 60_000) as? RuledSolveResult.Solved
+            assertNotNull(level.id, solved)
+            assertEquals(level.id, level.solution.size, requireNotNull(solved).moves.size)
+            assertTrue(level.id, level.id.startsWith(level.worldId + "-" + level.mode.slug + "-"))
+            when (level.mode) {
+                LevelMode.MIXED -> assertTrue(level.id, level.rules.isClassic)
+                LevelMode.SEALED -> assertTrue(level.id, level.rules.seals.all { level.board.tubes[it.tube].balls.isNotEmpty() })
+                LevelMode.PATTERN -> assertTrue(level.id, level.rules.singleStone)
+                LevelMode.CONNECTED -> assertNull(level.id, level.rules.target)
+                else -> fail(level.id)
+            }
+        }
+        // Each section starts gently: its first level is never one of its hard ones.
+        for (group in levels.groupBy { it.worldId to it.mode }.values) assertEquals(LevelRole.RELAXED, group.first().role)
+    }
+
     @Test fun bundledCollectionIsStructurallyDistinct() {
         val index = PuzzleDiversityIndex()
-        for (level in BundledLevelPacks.playtest().levels) {
+        for (level in BundledLevelPacks.playtestV3().levels) {
             assertEquals(level.id, DiversityAdmission.ADDED, index.admit(level.board))
         }
     }
 
     @Test fun largerCapacityStartsGentlyAndEachWorldIncludesBreathingPuzzles() {
-        val pack = BundledLevelPacks.playtest()
+        val pack = BundledLevelPacks.playtestV3()
         for (world in pack.worlds) {
             val levels = pack.levels.filter { it.worldId == world.id }
             assertEquals(LevelRole.INTRODUCTION, levels.first().role)

@@ -29,9 +29,10 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
     PlayOptions.load(appContext) // Reads the saved choice once; later calls do nothing.
     val tap: (Int) -> Unit = { index ->
         if (state.reducedMotion && state.selected != null && state.selected != index) {
-            PuzzleRules.transfer(state.board, com.example.ballsortgame.engine.Move(state.selected, index))?.let { transfer ->
+            state.rules.transfer(com.example.ballsortgame.engine.RuledPosition(state.board, state.openSeals),
+                com.example.ballsortgame.engine.Move(state.selected, index))?.let { (_, count) ->
                 val destination = state.board.tubes[index]
-                feedback.impact(LandingImpact(transfer.count, (destination.capacity - destination.balls.size).toFloat()))
+                feedback.impact(LandingImpact(count, (destination.capacity - destination.balls.size).toFloat()))
             }
         }
         actions.tapTube(index)
@@ -40,17 +41,21 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
     val worldNumber = levels.take(state.levelIndex + 1).count { it.worldId == level.worldId }
     WorldTheme(level.worldId) {
     Box(Modifier.fillMaxSize()) {
-    if (showBackdrop) WorldBackdrop(level.worldId, modifier = Modifier.matchParentSize())
+    if (showBackdrop) PlayBackdrop(level.worldId, Modifier.matchParentSize())
     Scaffold(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) { padding ->
         BoxWithConstraints(
             Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).padding(horizontal = 20.dp),
         ) {
             if (state.loading) {
-                CircularProgressIndicator(Modifier.align(Alignment.Center))
+                CircularProgressIndicator(Modifier.align(Alignment.Center), color = LocalWorldLook.current.accent.copy(alpha = .6f), strokeWidth = 2.dp)
             } else {
                 val wide = maxWidth >= 600.dp && maxWidth > maxHeight
                 val restart = {
-                    if (state.canUndo && !state.board.isSolved) confirmRestart = true else actions.restart()
+                    if (state.canUndo && !state.solved) confirmRestart = true else actions.restart()
+                }
+                val last = nextPuzzle == null && state.levelIndex == levels.lastIndex
+                val goNext: () -> Unit = {
+                    if (nextPuzzle != null) nextPuzzle() else if (last) { if (browse != null) browse() else showLevels = true } else actions.chooseLevel(state.levelIndex + 1)
                 }
                 if (wide) {
                     Row(
@@ -63,11 +68,8 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
                             GameHeader(level, worldNumber, { if (browse != null) browse() else showLevels = true }, { showSettings = true }, showBrowse, extraAction)
-                            GameStatus(state)
+                            GameStatus(state, last, goNext)
                             GameControls(state, actions, restart)
-                            Completion(state, nextPuzzle == null && state.levelIndex == levels.lastIndex) {
-                                if (nextPuzzle != null) nextPuzzle() else if (state.levelIndex == levels.lastIndex) { if (browse != null) browse() else showLevels = true } else actions.chooseLevel(state.levelIndex + 1)
-                            }
                         }
                     }
                 } else {
@@ -75,16 +77,14 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                         Modifier.fillMaxSize().widthIn(max = 640.dp).align(Alignment.Center).padding(vertical = 8.dp),
                     ) {
                         GameHeader(level, worldNumber, { if (browse != null) browse() else showLevels = true }, { showSettings = true }, showBrowse, extraAction)
+                        state.rules.target?.let { PatternTarget(it, state.colorLabels, state.board) }
                         PuzzleBoard(
                             state, tap, actions.finishTransfer,
                             Modifier.weight(1f).fillMaxWidth(), feedback::landing, feedback::contact, PlayOptions.hiddenColors,
                         )
-                        GameStatus(state)
+                        GameStatus(state, last, goNext)
                         Spacer(Modifier.height(12.dp))
                         GameControls(state, actions, restart)
-                        Completion(state, nextPuzzle == null && state.levelIndex == levels.lastIndex) {
-                            if (nextPuzzle != null) nextPuzzle() else if (state.levelIndex == levels.lastIndex) { if (browse != null) browse() else showLevels = true } else actions.chooseLevel(state.levelIndex + 1)
-                        }
                         Spacer(Modifier.height(8.dp))
                     }
                 }
@@ -127,40 +127,44 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
 @Composable
 private fun GameHeader(level: PlayableLevel, worldNumber: Int, puzzles: () -> Unit, settings: () -> Unit, showBrowse: Boolean, extraAction: (() -> Unit)?) {
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (showBrowse) NightButton(if (level.worldId == "endless") "‹ Worlds" else "‹ ${level.collection}",
+        // The level number rides on the way back to its world: it is where you are, not a title.
+        if (showBrowse) NightButton(if (level.worldId == "endless") "‹ Worlds" else "‹ ${level.collection} · $worldNumber",
             Modifier.testTag("puzzles"), onClick = puzzles)
         Spacer(Modifier.weight(1f))
         if (extraAction != null) IconButton(extraAction,
             Modifier.semantics { contentDescription = "Infinite options" }.testTag("infinite_options")) { Text("⋯", style = MaterialTheme.typography.headlineMedium) }
         SettingsButton(settings, Modifier.testTag("settings"))
     }
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(if (level.worldId == "endless") "Infinite" else "Level $worldNumber",
-            style = MaterialTheme.typography.headlineMedium)
-        Text(level.initial.tubes.map { it.capacity }.distinct().joinToString(" / ") + " slots",
-            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-    }
+    // Only levels that differ from plain sorting say so, in a bubble that explains itself when tapped.
+    Box(Modifier.fillMaxWidth().padding(top = 2.dp), contentAlignment = Alignment.Center) { TraitBubbles(level) }
 }
 
 @Composable
-private fun GameStatus(state: GameUiState) {
-    val blocked = !state.board.isSolved && PuzzleRules.legalMoves(state.board).isEmpty()
+private fun GameStatus(state: GameUiState, last: Boolean, next: () -> Unit) {
+    val blocked = !state.solved && state.rules.legalMoves(com.example.ballsortgame.engine.RuledPosition(state.board, state.openSeals)).isEmpty()
     val text = when {
-        state.board.isSolved -> "Nicely sorted."
+        state.solved -> ""
         state.message.isNotBlank() -> state.message
         blocked -> "No moves available. Undo, restart, or ask for a hint."
-        state.selected != null -> "Choose a matching color or an empty tube."
-        state.queuedTransfers > 0 -> ""
-        else -> "Tap a tube to begin."
+        // The very first puzzle says how to start. After that the line stays empty unless
+        // something needs saying; each mode explains itself in its bubble instead.
+        state.levelIndex == 0 && !state.canUndo && state.selected == null && state.rules.isClassic -> "Tap a tube to begin."
+        else -> ""
     }
-    Column(Modifier.fillMaxWidth().heightIn(min = 42.dp), verticalArrangement = Arrangement.Center) {
-        Text(
-            text, color = if (state.board.isSolved) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("game_status"),
+    // One slot of fixed height holds either a line of text or, once the puzzle is finished, the
+    // way onward. Nothing above or below it moves when the stone appears.
+    Column(Modifier.fillMaxWidth().heightIn(min = 60.dp), verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        if (state.solved && state.transfer == null) NightButton(if (last) "Choose another puzzle" else "Next puzzle  ›",
+            modifier = Modifier.widthIn(min = 200.dp).testTag("next"), onClick = next)
+        else Text(
+            text, color = if (state.solved) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.testTag("game_status"),
         )
         if (state.thinking) {
             Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(Modifier.fillMaxWidth())
+            LinearProgressIndicator(Modifier.width(120.dp), color = LocalWorldLook.current.accent.copy(alpha = .6f), trackColor = Color.Transparent)
         }
         state.saveWarning?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -171,7 +175,7 @@ private fun GameStatus(state: GameUiState) {
 @Composable
 private fun GameControls(state: GameUiState, actions: GameActions, restart: () -> Unit) {
     val intro = rememberControlIntro()
-    val solved = state.board.isSolved
+    val solved = state.solved
     LaunchedEffect(solved) { if (solved) intro.puzzleSolved() }
     // Quiet outline icons, one row at any text size: the board is what the player looks at.
     Row(Modifier.fillMaxWidth()) {
@@ -187,14 +191,6 @@ private fun GameControls(state: GameUiState, actions: GameActions, restart: () -
     }
 }
 
-@Composable
-private fun Completion(state: GameUiState, last: Boolean, next: () -> Unit) {
-    if (state.board.isSolved && state.transfer == null) {
-        Spacer(Modifier.height(12.dp))
-        NightButton(if (last) "Choose another puzzle" else "Next puzzle",
-            modifier = Modifier.fillMaxWidth().testTag("next"), onClick = next)
-    }
-}
 
 @Composable
 internal fun SettingsDialog(state: GameUiState, feedback: GameFeedback, change: (Boolean, Boolean) -> Unit, compare: () -> Unit, dismiss: () -> Unit) {
@@ -220,7 +216,7 @@ internal fun SettingsDialog(state: GameUiState, feedback: GameFeedback, change: 
                             modifier = Modifier.semantics { contentDescription = "Hidden colors" })
                     }
                     Text("Only the top stone of each tube shows its color until you uncover the ones beneath. " +
-                        "New Infinite puzzles are chosen to suit this.", style = MaterialTheme.typography.bodySmall)
+                        "Some levels and Infinite puzzles are like this anyway; switch it on to have it everywhere.", style = MaterialTheme.typography.bodySmall)
                 }
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {

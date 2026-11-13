@@ -1,5 +1,49 @@
 # Remaining work after the menu follow-up
 
+## Stillstone launcher icon (2026-11-12)
+
+The creator selected B — Carved from the universal circle/squircle comparison. The
+installed APK now uses a continuous carved violet surface with a recessed vial and
+coral/mint/gold stones. The previous floating irregular plaque was rejected for clipping
+and leftover padding; its source is retained as history but no longer built.
+The regenerated B master was also rejected: it lost the approved top-left/bottom-right
+stone planes. Active source is now launcher-carved-approved-reference.png.base64, the
+original approved sheet. DecodeLauncherArtwork extracts B's actual circle/squircle pixels,
+adds overscan OUTSIDE the visible crops and generates separate normal/round icons.
+No regeneration in this correction; the sheet itself is not packaged in the APK.
+Source and extraction details: app/artwork/launcher-README.md.
+App name, application ID, signing and save paths were not changed.
+Debug assemble, lintDebug and all 3 focused WorldArtworkTest emulator checks passed.
+Installed Pixel app-drawer appearance reviewed; needs creator review on Samsung squircle
+and themed icons.
+
+
+## Infinite mode interaction examples (2026-11-12)
+
+Four playable examples are available from Infinite → Ways to play: Mixed tube sizes,
+Sealed tube, Connected boards and Restore a pattern. Separate per-mode saved histories,
+mode-aware hints, undo/restart, existing motion/feedback and a persistent pattern target.
+Each has a fixed board, explicitly labelled Example puzzle; no generator or tier changes.
+Classic Infinite and hidden colors retain their existing behavior and saved board.
+See [infinite-variants.md](infinite-variants.md) for rules, source map and validation.
+Needs creator visual/interaction feedback before generation or difficulty work.
+
+Design review is recorded in infinite-variants.md, with measured small-board results and
+their limits. Recommendations: keep Mixed for everyday variety and Connected for distinct
+planning; the empty Sealed spare mainly adds an opening phase. The creator then proposed
+putting stones inside the sealed tube so unlocking introduces a second sorting phase;
+keeping those contents visible is the suggested first prototype. That revision is not built and needs both pre-unlock and post-unlock validation.
+The creator found current Pattern too similar to Classic; proposed replacement is
+single-stone moves onto any color with an exact target. That is not built either.
+All such Pattern moves would be reversible, unlike the matching-color modes, so playing
+from a solvable position cannot create a losing position. Human difficulty/skill ceilings
+are not established. These notes do not authorize generation or gameplay changes.
+Verified: debug assemble, 48 app JVM tests, lintDebug; 7 focused emulator checks (4 variant,
+1 group motion, 2 browser), with the 4 variant checks rerun after final pattern placement.
+All four example screens and the picker reviewed on the normal portrait emulator.
+No physical-phone or compact/large-font visual validation claimed.
+
+
 This is the current queue; product-plan.md is the original planning snapshot,
 not a record of everything still missing. Optional ideas below are not promises
 to include them in the first release.
@@ -13,6 +57,9 @@ to include them in the first release.
   (not yet approved): entrances at 58% of width instead of 70%, and their silhouette edge
   dissolves into the mist (WorldArtwork.ENTRANCE_FEATHER, computed once when the art loads;
   source images unchanged). The creator likes this "much more" (emulator); phone review open.
+  **2026-11-13:** later judged still wrong (detailed badges in undetailed fog; the badges
+  were placeholders). Replaced by one continuous scene of four stretches built from the
+  existing wide paintings; see world-ui.md. Entrance and fog code removed. Not yet reviewed.
 - **Sound and haptics reported as not working.** Measured on the emulator: the impact clip
   does play on every landing, but at about -35 dB (media volume 5/15 plus a quiet clip).
   Sound is also skipped whenever the phone's ringer is on vibrate or silent, and haptics
@@ -75,8 +122,53 @@ Measured with dumpsys gfxinfo / top / power on the debug build:
 - The one costly spot is scrolling the world browser: about 30 ms per frame on the emulator
   (mist layer, erase masks and gradients redrawn each frame). Brief, and unmeasured on a
   phone. Caching the static backdrop would be the fix if a phone shows dropped frames.
+  (That mist backdrop was removed with the 2026-11-13 world screen; not re-measured.)
 No change was needed. A real figure needs a release build on a phone (Android's battery
 usage screen, or Android Studio's energy profiler) over a long session.
+
+## One run per world, quieter screens (2026-11-12 evening, awaiting review)
+
+Creator feedback: the pattern target was too small; tube numbers and level descriptions
+were debugging aids; the level title should be far less visible and at the top; the mode
+should not be in the level name; mode sections should become one varied progression per
+world; and the level list scrolled badly (hidden edges, no sign it scrolls).
+
+- **Order.** Each world is now ONE numbered run (Dusk 47, Moonlight 47, Midnight 46),
+  superseding the "sections" described below and in campaign-modes.md. Introductions,
+  then all non-challenge levels by an approximate difficulty score across modes, each
+  mode introduced on its own a few levels apart by its gentlest level, and the CHALLENGE
+  levels spread evenly through the run as jumps, never in the first eight and the hardest
+  last. The score is a rough blend (classic: length; modes: the generator's hardness), not
+  a measured cross-mode scale, so expect local bumps. Level IDs are unchanged.
+- **Game screen.** No big title or "N slots" line. The level number sits small and dim in
+  the top row. A level that differs from plain sorting shows a bubble (LevelTrait in
+  ModeBubble.kt: Mixed sizes, Sealed tubes, Connected boards, Restore a pattern, Hidden
+  colors); tapping it opens a small note under it that closes on the next tap anywhere,
+  and the note opens by itself the first time a trait is met ("met_*" in the onboarding
+  preferences). Tubes have no numbers; a sealed tube shows only "0 / 2". The status line
+  is empty unless something needs saying. Hints say "Move the lifted stones to the
+  glowing tube." Accessibility descriptions still name tubes and levels.
+- **Pattern target** is about 60% larger and has no caption.
+- **Level list.** One grid that scrolls as a whole with the world name and "N of M sorted",
+  filling the window under the floating Back and Settings buttons, fading only at the
+  screen's top and bottom edges. Each stone carries a small mark for its trait.
+- 2026-11-13: challenge levels are marked. In the list a challenge stone has a second,
+  warm rim and a small peak; in play it has a "Challenge" bubble whose note says it is
+  harder and optional (LevelTrait.CHALLENGE, PlayableLevel.challenge from the pack role).
+- 2026-11-13: the level number moved onto the Back stone ("‹ Dusk · 26") after the
+  creator found the separate dim number out of place wherever it sat.
+- 2026-11-13: the Infinite mock modes were removed at the creator's request (picker,
+  example screens, their tests and saved histories' code). Infinite is classic play again,
+  with occasional hidden-colours puzzles. infinite-variants.md is kept as history only.
+- Not done: nothing viewed on a compact screen, with large text or on a phone.
+
+## Campaign modes (2026-11-12, awaiting review)
+
+Mixed sizes, Sealed tubes (one or two, with stones inside), Connected boards and Restore a
+pattern (one-stone moves) are optional sections in every world: 80 new levels, graded from
+straightforward to harder. See [campaign-modes.md](campaign-modes.md) for rules, the
+level format, the generator and what was and was not verified. Needs the creator's play
+ratings; the sealed and connected hard ends and the pattern mode's pacing are unproven.
 
 ## Hidden colours and the refreshed campaign (2026-11-12, awaiting review)
 
@@ -86,6 +178,29 @@ and stays revealed, including after Undo and Restart. Moving rules are unchanged
 move still carries every matching stone under the top one, seen or not. Unseen stones are
 always the bottom ones of a tube: their number is one less than the smallest size the tube
 has had (engine/HiddenColors.kt), so nothing new is saved. Hints still use full knowledge.
+
+Creator feedback 2026-11-12: hidden colours is good as an occasional change, not all the
+time. (They had seen every level hidden because the Settings switch had been left on after
+testing.) So individual levels can now be hidden-colours levels: `LevelRules.hidden`,
+written as `hidden` in the level pack, shown as "· hidden colors" under the level title.
+Two calm classic levels per world carry it (Dusk 6 and 8, Moonlight 4 and 7, Midnight 4
+and 7), each still solved by simple play without sight of the buried stones. The Settings
+switch remains for players who want it everywhere.
+
+Later the same day, at the creator's request:
+- Hidden colours in Infinite: with the switch off, about one new puzzle in five is a
+  hidden-colours puzzle (an H1 code, shown hidden wherever it is played). With the switch
+  on, every new puzzle is.
+- One easy level in each mixed, sealed and connected section is hidden (nine in all);
+  pattern levels never are. These nine were NOT measured for blind play: the blind
+  measure only exists for classic rules. They were chosen from each section's easy steps.
+- 27 more classic levels: 21 calm ones (no losing position, simple play always wins, from
+  the same candidate pool as the earlier 22) and two BALANCED-tier levels per world, the
+  first of that tier in the campaign (simple play wins 56-79%; Dusk 74% and 59%).
+  Order per world: introductions, calm levels by length with the two balanced ones about
+  halfway and near the end, then the hard closing group. Four calm classic levels per
+  world are hidden-colours levels. Dusk and Moonlight got fewer than the eight calm
+  levels planned because the pool had no unused candidates at the longest lengths.
 
 Does it make puzzles harder? Measured with the four simple strategies, with and without
 sight of buried stones (`hidden-study`, 120 shuffles per recipe):

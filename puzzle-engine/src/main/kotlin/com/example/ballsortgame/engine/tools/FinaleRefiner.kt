@@ -30,7 +30,7 @@ internal fun runFinaleRefinement(options: Map<String, String>) {
     require(count in 1..200)
     val seed = options.longNumber("seed", 40_000)
     require(seed in 0..Long.MAX_VALUE - 10_200)
-    val base = options["input"]?.let { LevelPackCodec.decode(File(it).readText()) } ?: BundledLevelPacks.playtest()
+    val base = options["input"]?.let { LevelPackCodec.decode(File(it).readText()) } ?: BundledLevelPacks.playtestV3()
     require(base.worlds.any { it.id == "four" } && base.worlds.any { it.id == "five" })
     val budget = challengeBudget(options)
     val reference = referenceChallenge()

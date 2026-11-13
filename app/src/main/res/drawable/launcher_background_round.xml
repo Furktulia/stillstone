@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Exact circular B reference with material overscan added outside its approved crop. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/launcher_stone_round" android:gravity="fill" android:filter="true" />

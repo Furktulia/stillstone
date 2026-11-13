@@ -3,6 +3,10 @@ package com.example.ballsortgame.ui
 import android.content.Context
 import android.media.AudioManager
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -40,31 +44,33 @@ internal fun SoundComparison(feedback: GameFeedback, dismiss: () -> Unit) {
         lifecycle.addObserver(observer)
         onDispose { task?.cancel(); lifecycle.removeObserver(observer); player.release() }
     }
-    NightDialog(onDismissRequest = dismiss, title = { Text("Compare drop sounds") }, text = {
+    NightDialog(onDismissRequest = dismiss, title = { Text("Stone sound") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Synthetic material studies. Use the same drop and volume to compare their character.")
+            Text("Choose how the stones sound when they land.")
             ImpactStyle.entries.forEach { style ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected == style, onClick = { stop(); styleName = style.name },
-                        modifier = Modifier.semantics { contentDescription = style.title })
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .selectable(selected == style, role = Role.RadioButton) { stop(); styleName = style.name }
+                    .semantics(mergeDescendants = true) { contentDescription = style.title }.padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    NightRadio(selected == style)
                     Column {
-                        Text(style.title)
+                        Text(style.title, color = LocalWorldLook.current.light)
                         Text(style.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(!group, { stop(); group = false }, label = { Text("Single") })
-                FilterChip(group, { stop(); group = true }, label = { Text("3 balls") })
+                NightChip("Single", !group) { stop(); group = false }
+                NightChip("3 balls", group) { stop(); group = true }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(!deep, { stop(); deep = false }, label = { Text("Shallow") })
-                FilterChip(deep, { stop(); deep = true }, label = { Text("Deep") })
+                NightChip("Shallow", !deep) { stop(); deep = false }
+                NightChip("Deep", deep) { stop(); deep = true }
             }
             Text("Preview volume")
-            Slider(volume, { stop(); volume = it }, modifier = Modifier.semantics { contentDescription = "Preview volume" })
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = {
+            NightSlider(volume, { stop(); volume = it }, modifier = Modifier.semantics { contentDescription = "Preview volume" })
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                NightButton("Play", Modifier.widthIn(min = 112.dp), onClick = {
                     task?.cancel()
                     player.stop()
                     val sampleStyle = selected
@@ -79,11 +85,11 @@ internal fun SoundComparison(feedback: GameFeedback, dismiss: () -> Unit) {
                             message = sampleStyle.title + if (sampleCount == 1) " · single drop" else " · three-ball contact"
                         }
                     }
-                }) { Text("Play") }
-                TextButton(onClick = { stop() }) { Text("Stop") }
+                })
+                NightDialogAction("Stop") { stop() }
             }
             Text(message, style = MaterialTheme.typography.bodySmall)
-            Text("Preview works even if game sounds are off. Media volume applies; the ringer or vibrate setting does not. Group clips add quieter contact taps; this is a sound study, not new collision physics.",
+            Text("The preview plays even when stone sounds are off, at your media volume.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }, confirmButton = {

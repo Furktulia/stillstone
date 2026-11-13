@@ -80,7 +80,7 @@ internal fun runTierPool(options: Map<String, String>) {
     val seed = options.longNumber("seed", 80_000)
     val maxStates = options.number("analysis-states", PuzzleAnalyzer.DEFAULT_MAX_STATES)
     val attempts = options.number("attempts", 4000)
-    val shipped = BundledLevelPacks.playtest()
+    val shipped = BundledLevelPacks.playtestV3()
     val diversity = PuzzleDiversityIndex()
     shipped.levels.forEach { diversity.admit(it.board) }
     val levels = ArrayList<PackLevel>()

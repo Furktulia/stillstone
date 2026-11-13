@@ -1,4 +1,6 @@
 import java.util.Base64
+import java.awt.image.BufferedImage
+import java.awt.RenderingHints
 
 plugins {
     alias(libs.plugins.android.application)
@@ -60,10 +62,9 @@ abstract class DecodeWorldArtwork : DefaultTask() {
         val destination = outputDirectory.get().dir("worlds").asFile
         destination.deleteRecursively() // Generated output only; exclude obsolete comparison sheets.
         destination.mkdirs()
-        val active = setOf("dusk-depth-v2", "moonlight-depth-v2", "midnight-depth-v5",
-            "dusk-frame-v2", "moonlight-frame-v2", "midnight-frame-v2", "midnight-portrait-v3",
+        val active = setOf("dusk-frame-v2", "moonlight-frame-v2", "midnight-frame-v2", "midnight-portrait-v3",
             "dusk-wide-v2", "moonlight-wide-v2", "midnight-wide-v2",
-            "infinite-entry-v1", "stone-button-v1", "browser-mist-v1")
+            "stone-button-v1")
         active.forEach { name ->
             val source = originals.file("$name.png.base64").get().asFile
             destination.resolve("$name.png").writeBytes(Base64.getMimeDecoder().decode(source.readText()))
@@ -95,6 +96,99 @@ val decodeDisplayFont = tasks.register<DecodeDisplayFont>("decodeDisplayFont") {
 }
 androidComponents.onVariants { variant ->
     variant.sources.res?.addGeneratedSourceDirectory(decodeDisplayFont, DecodeDisplayFont::outputDirectory)
+}
+
+// Launcher sources follow the same portable Base64 convention as world art.
+// Resize at build time; no image service, external tool or local generated_images path is needed.
+abstract class DecodeLauncherArtwork : DefaultTask() {
+    @get:InputFile abstract val original: org.gradle.api.file.RegularFileProperty
+    @get:OutputDirectory abstract val outputDirectory: org.gradle.api.file.DirectoryProperty
+    @TaskAction fun decode() {
+        val bytes = Base64.getMimeDecoder().decode(original.get().asFile.readText())
+        val sheet = javax.imageio.ImageIO.read(bytes.inputStream())
+            ?: error("Approved launcher reference is not a PNG")
+        check(sheet.width == 1536 && sheet.height == 1024) { "Approved reference dimensions changed; review crop coordinates" }
+
+        // Extract the actual approved B pixels. No regeneration, recolouring or invented texture.
+        // Separate circle/squircle artwork retains each reference's own corner details.
+        fun extract(left: Int, top: Int, right: Int, bottom: Int): BufferedImage {
+            fun painted(x: Int, y: Int): Boolean {
+                val pixel = sheet.getRGB(x, y)
+                val red = pixel shr 16 and 255
+                val green = pixel shr 8 and 255
+                val blue = pixel and 255
+                return blue - green > 6 && red - green > 4
+            }
+            var minX = right; var maxX = left; var minY = bottom; var maxY = top
+            for (y in top until bottom) for (x in left until right) if (painted(x, y)) {
+                minX = minOf(minX, x); maxX = maxOf(maxX, x)
+                minY = minOf(minY, y); maxY = maxOf(maxY, y)
+            }
+            val size = maxOf(maxX - minX + 1, maxY - minY + 1)
+            check(size in 290..330) { "Could not locate the approved B icon" }
+            val x0 = (minX + maxX + 1 - size) / 2
+            val y0 = (minY + maxY + 1 - size) / 2
+            val image = BufferedImage(size, size, BufferedImage.TYPE_INT_RGB)
+            fun interiorStone(x: Int, y: Int): Boolean {
+                val pixel = sheet.getRGB(x, y)
+                val red = pixel shr 16 and 255
+                val green = pixel shr 8 and 255
+                val blue = pixel and 255
+                // Reject the pale gray/stone blend from the mockup's already-antialiased rim.
+                return blue - green > 18 && red - green > 10
+            }
+            for (y in 0 until size) {
+                val sy = (y0 + y).coerceIn(minY + 2, maxY - 2)
+                var first = minX; var last = maxX
+                while (first < last && !interiorStone(first, sy)) first++
+                while (last > first && !interiorStone(last, sy)) last--
+                check(last > first) { "Missing stone material in approved launcher crop" }
+                // Extend clean material from two pixels inside the rim. This removes only
+                // the gray-matted fringe; the original interior texture and mark stay intact.
+                val inset = minOf(2, (last - first) / 2)
+                first += inset; last -= inset
+                for (x in 0 until size) image.setRGB(x, y, sheet.getRGB((x0 + x).coerceIn(first, last), sy))
+            }
+            logger.lifecycle("Approved B crop: x=$x0 y=$y0 size=$size")
+            return image
+        }
+        fun overscan(visible: BufferedImage): BufferedImage {
+            val side = visible.width * 3 / 2
+            val margin = (side - visible.width) / 2
+            val image = BufferedImage(side, side, BufferedImage.TYPE_INT_RGB)
+            // Android reveals the middle 72dp of its 108dp layer. Add overscan OUTSIDE
+            // the approved crop instead of cropping away the top-left/bottom-right details.
+            for (y in 0 until side) for (x in 0 until side) image.setRGB(x, y,
+                visible.getRGB((x - margin).coerceIn(0, visible.width - 1),
+                    (y - margin).coerceIn(0, visible.height - 1)))
+            return image
+        }
+        fun write(source: BufferedImage, folder: String, name: String, size: Int) {
+            val target = outputDirectory.get().dir(folder).asFile.apply { mkdirs() }.resolve(name)
+            val image = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
+            val graphics = image.createGraphics()
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+            graphics.drawImage(source, 0, 0, size, size, null)
+            graphics.dispose()
+            javax.imageio.ImageIO.write(image, "png", target)
+        }
+        val square = extract(1136, 8, 1460, 342)
+        val circle = extract(800, 8, 1136, 342)
+        write(overscan(square), "drawable-nodpi", "launcher_stone.png", 512)
+        write(overscan(circle), "drawable-nodpi", "launcher_stone_round.png", 512)
+        mapOf("mdpi" to 48, "hdpi" to 72, "xhdpi" to 96, "xxhdpi" to 144, "xxxhdpi" to 192).forEach { (density, size) ->
+            write(square, "mipmap-$density", "ic_stillstone.png", size)
+            write(circle, "mipmap-$density", "ic_stillstone_round.png", size)
+        }
+    }
+}
+val decodeLauncherArtwork = tasks.register<DecodeLauncherArtwork>("decodeLauncherArtwork") {
+    original.set(layout.projectDirectory.file("artwork/launcher-carved-approved-reference.png.base64"))
+    outputDirectory.set(layout.buildDirectory.dir("generated/launcher-artwork"))
+}
+androidComponents.onVariants { variant ->
+    variant.sources.res?.addGeneratedSourceDirectory(decodeLauncherArtwork, DecodeLauncherArtwork::outputDirectory)
 }
 
 dependencies {

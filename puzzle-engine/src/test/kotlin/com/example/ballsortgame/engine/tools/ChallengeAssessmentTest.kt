@@ -78,7 +78,7 @@ class ChallengeAssessmentTest {
     }
 
     @Test fun selectedNewFinalesMeetTheReferenceScreenAndHaveEarlyTemptingChoices() {
-        val pack = BundledLevelPacks.playtest()
+        val pack = BundledLevelPacks.playtestV3()
         for (world in listOf("four", "five")) {
             val last = pack.levels.last { it.worldId == world }
             val result = assessChallenge(last)
@@ -99,7 +99,7 @@ class ChallengeAssessmentTest {
         assertTrue(java.io.File(output, "candidates.csv").isFile)
         assertTrue(java.io.File(output, "screening.csv").isFile)
         val pool = LevelPackCodec.decode(java.io.File(output, "pool.txt").readText())
-        assertEquals(BundledLevelPacks.playtest(), pool)
+        assertEquals(BundledLevelPacks.playtestV3(), pool)
         assertFalse(java.io.File(output, "playtest.txt").exists())
     }
 }

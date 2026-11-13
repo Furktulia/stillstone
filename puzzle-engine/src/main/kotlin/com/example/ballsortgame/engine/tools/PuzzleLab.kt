@@ -40,7 +40,7 @@ fun main(args: Array<String>) {
             """.trimIndent())
             return
         }
-        require(command in setOf("generate", "benchmark", "corpus", "survey", "workshop", "pack", "verify-pack", "difficulty-study", "review-challenges", "refine-finales", "replay-seed", "tier-survey", "tier-pool", "seed-benchmark", "hidden-study", "relaxed-campaign")) { "Unknown command: $command" }
+        require(command in setOf("generate", "benchmark", "corpus", "survey", "workshop", "pack", "verify-pack", "difficulty-study", "review-challenges", "refine-finales", "replay-seed", "tier-survey", "tier-pool", "seed-benchmark", "hidden-study", "relaxed-campaign", "mode-campaign")) { "Unknown command: $command" }
         val options = parseOptions(args.drop(1))
         when (command) {
             "replay-seed" -> {
@@ -69,6 +69,7 @@ fun main(args: Array<String>) {
             "seed-benchmark" -> runSeedBenchmark(options)
             "hidden-study" -> runHiddenStudy(options)
             "relaxed-campaign" -> runRelaxedCampaign(options)
+            "mode-campaign" -> runModeCampaign(options)
         }
     } catch (error: IllegalArgumentException) {
         System.err.println("Puzzle Lab: ${error.message}")

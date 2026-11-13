@@ -64,6 +64,13 @@ button. Subsequent cold launches restore the last campaign or Infinite game.
 - Infinite has its own fourth entrance. Its ⋯ menu holds seed/bookmark/export tools.
 - Settings uses the same minimal outline gear everywhere.
 
+**Superseded 2026-11-13:** the world screen is now one continuous painted journey of
+four full-width stretches (WorldVistas.kt); see the first section of world-ui.md.
+The entrance, mist and fog description below, down to "Level selection", is history
+and those assets are no longer packaged. The creator approved it on the emulator; the play
+screen, level list, Infinite options and sound panel were then restyled to match
+(second section of world-ui.md) and those await review.
+
 The browser is a tall scrolling composition of irregular depth entrances, never
 rectangular image cards. Each entrance gets its own row, about 65–75% screen width
 (70% as committed; a 58% soft-edged variant is under review, see next-steps.md), alternately left/right with moderate gaps. Dusk is not deliberately
@@ -125,7 +132,11 @@ Stone labels auto-fit on one line. This new choice still needs creator phone rev
 “app/...” above means app/src/main/java/com/example/ballsortgame/.
 Engine sources are under puzzle-engine/src/main/kotlin/com/example/ballsortgame/engine/.
 
-33 current levels (playtest-v3.txt since 2026-11-12): Dusk (world ID three, capacity 3,
+Since later on 2026-11-12 the shipped pack is playtest-v5.txt: these 33 classic levels, 27
+more classic ones (60: Dusk 19, Moonlight 19, Midnight 22) and 80 optional mode levels with their own rules (docs/campaign-modes.md). Levels are no
+longer all classic: use LevelRules / GameSession.solved, never Board.isSolved, for goals.
+
+33 classic levels (playtest-v3.txt since 2026-11-12): Dusk (world ID three, capacity 3,
 10 levels); Moonlight (four, capacity 4, 11); Midnight (five, capacity 5, 12).
 The 22 relaxed levels were replaced at the creator's request with longer ones that have no
 losing position; introductions and the six hard levels keep their IDs, boards and
@@ -252,6 +263,18 @@ packages only 13 active normal PNGs offline. Old source variants are retained as
 history but excluded from the APK. Font source is app/typography/*.ttf.base64;
 DecodeDisplayFont generates res/font/libre_baskerville.ttf.
 Its OFL license is shipped under assets/licenses.
+
+Launcher icon update 2026-11-12: the creator selected B — Carved from the universal
+circle/squircle sheet after rejecting the floating stone plaque's clipping and padding.
+The regenerated launcher-carved-v2 was rejected too for changed corner details. Active
+input is app/artwork/launcher-carved-approved-reference.png.base64, the ORIGINAL sheet.
+DecodeLauncherArtwork extracts actual B pixels, adds overscan outside the approved crop
+and packages only individual icons, never the comparison sheet. Main icon ic_stillstone
+uses the squircle artwork; roundIcon ic_stillstone_round uses the circular artwork.
+Both have full-composition backgrounds and transparent foregrounds; the themed vector
+remains. Older launcher-stone-v1 and launcher-carved-v2 sources are history only.
+Details/validation: app/artwork/launcher-README.md. No app-name, identity, signing or save
+changes. Do not regenerate the selected logo to repair layout/cropping.
 Do not edit generated build files or require a runtime network/API key.
 
 world-ui.md records active assets, rendering choices and exact generation prompts.
@@ -288,6 +311,19 @@ by these tests. API 29, process-death/upgrade/export/release checks remain work.
 Build commands are in the root README. Run relevant tests after code changes,
 with connected device operations/builds sequential in the IDE environment.
 Use Android Studio's Gradle JDK; do not guess a different system Java installation.
+
+## Infinite interaction examples added 2026-11-12
+
+At the creator's request, Infinite now offers Mixed tube sizes, Sealed tube, Connected
+boards and Restore a pattern alongside Classic. They use fixed playable examples with
+independent saved histories; reliable generation/difficulty is deliberately deferred.
+No engine generation code was modified for this feature. See
+[infinite-variants.md](infinite-variants.md) and the new next-steps section before continuing.
+That feature document now also separates implemented examples from design review:
+Mixed/Connected recommendations, the creator's filled sealed-tube proposal, and a proposed
+unrestricted single-stone Pattern replacement after the creator rejected its similarity
+to Classic. Neither proposed rules change is implemented. Exploratory graph results are
+small-board evidence, not human difficulty calibration or a proven skill ceiling.
 
 ## 10. What remains open
 

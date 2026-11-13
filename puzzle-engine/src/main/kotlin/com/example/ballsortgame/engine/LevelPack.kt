@@ -13,13 +13,16 @@ data class PackLevel(
     val shortestProven: Boolean,
     val board: Board,
     val solution: List<Move>,
+    /** Classic sorting unless the level says otherwise. The certificate is checked under these rules. */
+    val rules: LevelRules = LevelRules.CLASSIC,
 ) {
     init {
-        require(!board.isSolved) { "Already solved level: $id" }
-        require(solution.isNotEmpty() && PuzzleRules.verifiesSolution(board, solution)) {
+        require(!rules.solved(board)) { "Already solved level: $id" }
+        require(solution.isNotEmpty() && rules.verifiesSolution(board, solution)) {
             "Invalid solution certificate: $id"
         }
     }
+    val mode: LevelMode get() = rules.mode(board)
 }
 
 data class LevelPack(val worlds: List<PackWorld>, val levels: List<PackLevel>) {
@@ -64,13 +67,14 @@ object LevelPackCodec {
             require(idPattern.matches(level.id))
             require(level.board.tubes.size <= 32 && level.solution.size <= 10_000)
             require(level.board.tubes.all { it.capacity in 1..64 && it.balls.all { color -> color in 0..31 } })
-            require(PuzzleRules.verifiesSolution(level.board, level.solution))
+            require(level.rules.verifiesSolution(level.board, level.solution))
             val board = level.board.tubes.joinToString("|") { "${it.capacity}:${it.balls.joinToString(",")}" }
             val moves = level.solution.joinToString(",") { "${it.source}>${it.destination}" }
-            lines += listOf(
+            // Classic levels keep the original eight fields; a ninth carries any special rules.
+            lines += (listOf(
                 "LEVEL", level.id, level.worldId, level.role.name, level.seed?.toString() ?: "-",
                 level.shortestProven.toString(), board, moves,
-            ).joinToString("\t")
+            ) + listOfNotNull(level.rules.encode().takeIf { it.isNotEmpty() })).joinToString("\t")
         }
         return lines.joinToString("\n", postfix = "\n").also { require(it.length <= 8_000_000) }
     }
@@ -91,7 +95,7 @@ object LevelPackCodec {
                     worlds += PackWorld(f[1], f[2], f[3])
                 }
                 "LEVEL" -> {
-                    require(f.size == 8 && idPattern.matches(f[1]) && idPattern.matches(f[2])) { "Invalid level record" }
+                    require(f.size in 8..9 && idPattern.matches(f[1]) && idPattern.matches(f[2])) { "Invalid level record" }
                     require(levels.size < 10_000)
                     val tubes = f[6].split('|')
                     require(tubes.size in 1..32)
@@ -114,6 +118,7 @@ object LevelPackCodec {
                     levels += PackLevel(
                         f[1], f[2], LevelRole.valueOf(f[3]), f[4].takeUnless { it == "-" }?.toLong(),
                         f[5].toBooleanStrict(), board, moves,
+                        if (f.size == 9) LevelRules.decode(f[8]) else LevelRules.CLASSIC,
                     )
                 }
                 else -> throw IllegalArgumentException("Unknown level-pack record")
@@ -131,7 +136,10 @@ object BundledLevelPacks {
     fun previousPlaytest(): LevelPack = read("playtest-v1.txt")
     /** The campaign before its relaxed levels were replaced (2026-11-12). Kept for comparison and old tests. */
     fun playtestV2(): LevelPack = read("playtest-v2.txt")
-    fun playtest(): LevelPack = read("playtest-v3.txt")
+    /** The classic campaign alone, before the mode levels were added (2026-11-12). */
+    fun playtestV3(): LevelPack = read("playtest-v3.txt")
+    /** The classic campaign plus four optional mode sections per world. */
+    fun playtest(): LevelPack = read("playtest-v5.txt")
     fun difficultyStudy(): LevelPack = read("difficulty-study-v1.txt")
     private fun read(name: String): LevelPack =
         requireNotNull(BundledLevelPacks::class.java.getResourceAsStream("/levels/$name")) {

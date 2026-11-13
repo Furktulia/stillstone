@@ -7,6 +7,37 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorldArtworkTest {
+    @Test fun launcherUsesFullBleedCarvedArtworkAndThemedSymbol() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        assertTrue(context.applicationInfo.icon in setOf(R.mipmap.ic_stillstone, R.mipmap.ic_stillstone_round))
+        for ((iconId, artId) in listOf(R.mipmap.ic_stillstone to R.drawable.launcher_stone,
+            R.mipmap.ic_stillstone_round to R.drawable.launcher_stone_round)) {
+        val icon = context.resources.getDrawable(iconId, context.theme)
+        assertTrue(icon is android.graphics.drawable.AdaptiveIconDrawable)
+        val adaptive = icon as android.graphics.drawable.AdaptiveIconDrawable
+        val art = BitmapFactory.decodeResource(context.resources, artId)
+        assertEquals(512, art.width)
+        assertEquals(512, art.height)
+        // The master is a continuous stone surface, not a plaque floating inside a mask.
+        assertEquals(255, art.getPixel(0, 0).ushr(24))
+        assertEquals(255, art.getPixel(511, 511).ushr(24))
+        assertTrue(art.getPixel(256, 256).ushr(24) > 240)
+        art.recycle()
+        // Composition is in the full-bleed background; foreground must not add another badge.
+        val side = (108 * context.resources.displayMetrics.density).toInt()
+        val rendered = android.graphics.Bitmap.createBitmap(side, side, android.graphics.Bitmap.Config.ARGB_8888)
+        adaptive.foreground.setBounds(0, 0, side, side)
+        adaptive.foreground.draw(android.graphics.Canvas(rendered))
+        assertEquals(0, rendered.getPixel(0, 0).ushr(24))
+        assertEquals(0, rendered.getPixel(side / 2, side / 2).ushr(24))
+        adaptive.setBounds(0, 0, side, side)
+        adaptive.draw(android.graphics.Canvas(rendered))
+        assertTrue(rendered.getPixel(side / 2, side / 2).ushr(24) > 240)
+        rendered.recycle()
+        if (android.os.Build.VERSION.SDK_INT >= 33) assertNotNull(adaptive.monochrome)
+        }
+    }
+
     @Test fun displayTypefaceAndItsLicenseAreBundledOffline() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         assertNotNull(context.resources.getFont(R.font.libre_baskerville))
@@ -15,13 +46,13 @@ class WorldArtworkTest {
         assertTrue(license.contains("SIL OPEN FONT LICENSE Version 1.1"))
     }
 
-    @Test fun productionArtHasCutoutEntrancesAndPhoneFramesWithEmptyCenters() {
+    @Test fun productionArtIsCutOutSoSkyShowsThrough() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val entrances = listOf("dusk-depth-v2", "moonlight-depth-v2", "midnight-depth-v5", "infinite-entry-v1", "stone-button-v1")
+        val entrances = listOf("stone-button-v1")
         val frames = listOf("dusk-frame-v2", "moonlight-frame-v2", "midnight-frame-v2")
         val wide = listOf("dusk-wide-v2", "moonlight-wide-v2", "midnight-wide-v2")
         val continuous = listOf("midnight-portrait-v3")
-        assertEquals((entrances + frames + wide + continuous + "browser-mist-v1").map { "$it.png" }.toSet(), context.assets.list("worlds")!!.toSet())
+        assertEquals((entrances + frames + wide + continuous).map { "$it.png" }.toSet(), context.assets.list("worlds")!!.toSet())
         for (name in entrances + frames + wide + continuous) {
             val bitmap = context.assets.open("worlds/$name.png").use { BitmapFactory.decodeStream(it) }!!
             assertTrue("$name needs actual alpha", bitmap.hasAlpha())

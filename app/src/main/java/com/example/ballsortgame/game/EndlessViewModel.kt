@@ -22,6 +22,9 @@ class EndlessViewModel(context: Context) : ViewModel() {
     private var prefetch: Job? = null
     private var active = false
     private var closed = false
+    /** The player asked for hidden colours everywhere; otherwise only an occasional puzzle is hidden. */
+    private var alwaysHidden = false
+    private fun hiddenThisTime() = alwaysHidden || java.security.SecureRandom().nextInt(HIDDEN_ONE_IN) == 0
     private val mutable = MutableStateFlow(EndlessUi())
     val state = mutable.asStateFlow()
     init {
@@ -43,7 +46,9 @@ class EndlessViewModel(context: Context) : ViewModel() {
         require(value.getInt("version") == 1)
         if (closed) return
         val level = LevelPackCodec.decode(value.getString("pack")).levels.single()
-        val playable = PlayableLevel(level.id, "Endless", level.board, level.solution, "endless")
+        // Puzzles saved before hidden-colours puzzles existed carry no rules; an H1 code still means hidden.
+        val rules = if (value.getString("code").startsWith("H1-")) level.rules.copy(hidden = true) else level.rules
+        val playable = PlayableLevel(level.id, "Endless", level.board, level.solution, "endless", rules = rules)
         synchronized(lock) { record = value }
         owner.clear()
         owner = ViewModelStore()
@@ -100,7 +105,7 @@ class EndlessViewModel(context: Context) : ViewModel() {
                 val full = synchronized(lock) { (current.optJSONArray("queue")?.length() ?: 0) >= 2 }
                 if (full) return@launch
                 // Queue more of the kind being played; next() discards them if the choice changes.
-                val candidate = construct(recipeOf(current.getString("code")), hidden = current.getString("code").startsWith("H1-"))
+                val candidate = construct(recipeOf(current.getString("code")), hidden = hiddenThisTime())
                 withContext(Dispatchers.IO) {
                     synchronized(lock) {
                         if (record === current) {
@@ -117,6 +122,7 @@ class EndlessViewModel(context: Context) : ViewModel() {
     fun next(challenge: Boolean, entered: String? = null) = next(if (challenge) 'C' else 'B', entered)
     /** New puzzles always use the current quality-screened recipe; an entered code may be older. */
     fun next(recipe: Char, entered: String? = null, hidden: Boolean = false) {
+        alwaysHidden = hidden
         if (request?.isCompleted == false) return
         prefetch?.cancel()
         request?.cancel()
@@ -125,14 +131,16 @@ class EndlessViewModel(context: Context) : ViewModel() {
             try {
                 val queued = synchronized(lock) {
                     val queue = record?.optJSONArray("queue")
-                    if (entered == null && queue != null && queue.length() > 0 && queue.getJSONObject(0).getString("code").startsWith("${version(hidden)}-$recipe-")) {
+                    if (entered == null && queue != null && queue.length() > 0 && queue.getJSONObject(0).getString("code").let { code ->
+                            // With hidden colours switched on only hidden puzzles will do; otherwise either kind.
+                            code.startsWith("H1-$recipe-") || (!hidden && code.startsWith("E2-$recipe-")) }) {
                         val first = queue.getJSONObject(0)
                         val remaining = org.json.JSONArray()
                         for (i in 1 until queue.length()) remaining.put(queue.getJSONObject(i))
                         first.put("queue", remaining)
                     } else null
                 }
-                val value = queued ?: construct(recipe, entered, hidden)
+                val value = queued ?: construct(recipe, entered, hiddenThisTime())
                 val settings = state.value.game?.snapshotProgress()
                 if (settings != null) {
                     val id = LevelPackCodec.decode(value.getString("pack")).levels.single().id
@@ -192,5 +200,6 @@ class EndlessViewModel(context: Context) : ViewModel() {
         root.listFiles().orEmpty().filter { it.name.startsWith("example-") && it.extension == "json" }
             .sortedBy { it.name }.joinToString("\n") { it.readText() }
     }
+    private companion object { const val HIDDEN_ONE_IN = 5 }
     override fun onCleared() { closed = true; request?.cancel(); prefetch?.cancel(); owner.clear(); super.onCleared() }
 }

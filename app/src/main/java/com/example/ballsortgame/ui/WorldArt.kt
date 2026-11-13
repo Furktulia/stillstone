@@ -23,6 +23,7 @@ import kotlin.math.roundToInt
 internal data class WorldLook(val art: String, val base: Color, val accent: Color, val light: Color, val tube: Color)
 internal fun worldLook(id: String) = when (id) {
     "four" -> WorldLook("moonlight", Color(0xFF09151C), Color(0xFFA6CFD1), Color(0xFFD0E8EC), Color(0xFF5F7781))
+    "endless" -> WorldLook("midnight", Color(0xFF0D0E24), Color(0xFFC4B5F2), Color(0xFFE2DAFF), Color(0xFF6B678F))
     "five" -> WorldLook("midnight", Color(0xFF0B1024), Color(0xFFAEBEE8), Color(0xFFD4DEFF), Color(0xFF626F90))
     else -> WorldLook("dusk", Color(0xFF160D20), Color(0xFFC8AFE3), Color(0xFFE8D4F2), Color(0xFF796784))
 }
@@ -60,66 +61,20 @@ internal object WorldArtwork {
     private val cache = object : LruCache<String, ImageBitmap>(24 * 1024 * 1024) {
         override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4
     }
+    /** Already decoded art, without waiting: a screen that returns shows its pictures in its first frame. */
+    fun ready(name: String): ImageBitmap? = cache.get(name)
     @Synchronized fun load(context: Context, name: String): ImageBitmap {
         cache.get(name)?.let { return it }
         val options = BitmapFactory.Options().apply {
             inScaled = false
-            inSampleSize = if (name.contains("-depth-") || name.startsWith("infinite-entry") || name.startsWith("stone-button")) 2 else 1
+            inSampleSize = if (name.startsWith("stone-button")) 2 else 1
         }
         val bitmap = context.assets.open("worlds/$name.png").use { BitmapFactory.decodeStream(it, null, options) }
             ?: error("Unreadable world artwork: $name")
-        val entrance = name.contains("-depth-") || name.startsWith("infinite-entry")
-        val trimmed = if (entrance || name.startsWith("stone-button")) trimBorder(bitmap) else bitmap
-        val visible = if (entrance && ENTRANCE_FEATHER > 0f) featherEdges(trimmed, ENTRANCE_FEATHER) else trimmed
+        val visible = if (name.startsWith("stone-button")) trimBorder(bitmap) else bitmap
         return visible.asImageBitmap().also { cache.put(name, it) }
     }
 
-    /** Depth of the soft edge of a world entrance, as a fraction of its width. Zero keeps the cut-out edge. */
-    const val ENTRANCE_FEATHER = 0.035f
-
-    /**
-     * Dissolve the silhouette's edge into whatever is behind it. The alpha channel is blurred
-     * and remapped so the fade happens inside the outline: the middle of the picture is
-     * untouched, and thin leaves at the rim thin out instead of ending in a hard cut.
-     */
-    private fun featherEdges(bitmap: android.graphics.Bitmap, fraction: Float): android.graphics.Bitmap {
-        val w = bitmap.width; val h = bitmap.height
-        val radius = (w * fraction).roundToInt().coerceAtLeast(1)
-        val pixels = IntArray(w * h)
-        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
-        var alpha = FloatArray(w * h) { pixels[it].ushr(24) / 255f }
-        var scratch = FloatArray(w * h)
-        repeat(2) {
-            // Separable box blur; outside the picture counts as transparent.
-            for (y in 0 until h) {
-                var sum = 0f
-                for (x in -radius until w) {
-                    val enter = x + radius
-                    if (enter < w) sum += alpha[y * w + enter]
-                    val leave = x - radius - 1
-                    if (leave >= 0) sum -= alpha[y * w + leave]
-                    if (x >= 0) scratch[y * w + x] = sum / (radius * 2 + 1)
-                }
-            }
-            for (x in 0 until w) {
-                var sum = 0f
-                for (y in -radius until h) {
-                    val enter = y + radius
-                    if (enter < h) sum += scratch[enter * w + x]
-                    val leave = y - radius - 1
-                    if (leave >= 0) sum -= scratch[leave * w + x]
-                    if (y >= 0) alpha[y * w + x] = sum / (radius * 2 + 1)
-                }
-            }
-        }
-        for (i in pixels.indices) {
-            val inside = ((alpha[i] - .5f) * 2f).coerceIn(0f, 1f)
-            val soft = inside * inside * (3 - 2 * inside)
-            val a = (pixels[i].ushr(24) * soft).roundToInt()
-            pixels[i] = (a shl 24) or (pixels[i] and 0xFFFFFF)
-        }
-        return android.graphics.Bitmap.createBitmap(pixels, w, h, android.graphics.Bitmap.Config.ARGB_8888)
-    }
     private fun trimBorder(bitmap: android.graphics.Bitmap): android.graphics.Bitmap {
         val w = bitmap.width; val h = bitmap.height
         val pixels = IntArray(w * h)
@@ -141,122 +96,9 @@ internal object WorldArtwork {
 @Composable
 internal fun rememberArtwork(name: String): ImageBitmap? {
     val context = LocalContext.current.applicationContext
-    return produceState<ImageBitmap?>(null, name) {
-        value = withContext(Dispatchers.IO) { runCatching { WorldArtwork.load(context, name) }.getOrNull() }
+    return produceState(WorldArtwork.ready(name), name) {
+        if (value == null) value =withContext(Dispatchers.IO) { runCatching { WorldArtwork.load(context, name) }.getOrNull() }
     }.value
-}
-
-/** Draw the alpha silhouette itself as the rim; no rectangular hit-area decoration. */
-@Composable
-internal fun WorldEntrance(id: String, modifier: Modifier = Modifier, pressed: Boolean = false) {
-    val look = worldLook(id)
-    val art = rememberArtwork(when (id) { "five" -> "midnight-depth-v5"; "endless" -> "infinite-entry-v1"; else -> look.art + "-depth-v2" })
-    Canvas(modifier) {
-        if (art == null) return@Canvas
-        val inset = 3.dp.toPx()
-        val bounds = fittedArtwork(art.width, art.height,
-            (size.width - inset * 2).roundToInt().coerceAtLeast(1),
-            (size.height - inset * 2).roundToInt().coerceAtLeast(1))
-        val width = bounds.width
-        val height = bounds.height
-        val left = bounds.x + inset.roundToInt()
-        val top = bounds.y + inset.roundToInt()
-        val rim = (if (pressed) 1.4.dp else 0.7.dp).toPx().roundToInt().coerceAtLeast(1)
-        for (x in -1..1) for (y in -1..1) if (x != 0 || y != 0) {
-            drawImage(art, dstOffset = IntOffset(left + x * rim, top + y * rim),
-                dstSize = IntSize(width, height),
-                colorFilter = ColorFilter.tint(look.light.copy(alpha = if (pressed) 0.60f else 0.06f)))
-        }
-        drawImage(art, dstOffset = IntOffset(left, top), dstSize = IntSize(width, height))
-    }
-}
-
-/** [cloud] surrounds a world entrance with drifting-looking coloured fog; plain lights only glow. */
-internal data class WorldLight(val bounds: androidx.compose.ui.geometry.Rect, val color: Color, val cloud: Boolean = false)
-
-/**
- * Soft radial light drawn with a dithered native paint. Plain 8-bit gradients at these
- * low alphas form visible contour rings; where several overlapped and moved against
- * each other while scrolling, the rings crossed into a net-like pattern.
- */
-private class SoftLight(color: Color, stops: FloatArray, alphas: FloatArray) {
-    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.DITHER_FLAG).apply {
-        shader = android.graphics.RadialGradient(0f, 0f, 1f,
-            IntArray(stops.size) { color.copy(alpha = alphas[it]).toArgb() }, stops, android.graphics.Shader.TileMode.CLAMP)
-    }
-    fun draw(canvas: android.graphics.Canvas, x: Float, y: Float, radiusX: Float, radiusY: Float = radiusX,
-        strength: Float = 1f, erase: Boolean = false) {
-        if (radiusX <= 0f || radiusY <= 0f) return
-        paint.alpha = (strength.coerceIn(0f, 1f) * 255).roundToInt()
-        paint.blendMode = if (erase) android.graphics.BlendMode.DST_OUT else android.graphics.BlendMode.SRC_OVER
-        canvas.save()
-        canvas.translate(x, y)
-        canvas.scale(radiusX, radiusY)
-        canvas.drawCircle(0f, 0f, 1f, paint)
-        canvas.restore()
-    }
-}
-
-/** Irregular fog lobes around an entrance: angle (turns), distance and size relative to its width. */
-private val CloudLobes = listOf(
-    floatArrayOf(.03f, .56f, .46f, .23f), floatArrayOf(.15f, .64f, .36f, .25f),
-    floatArrayOf(.27f, .54f, .50f, .21f), floatArrayOf(.41f, .66f, .38f, .24f),
-    floatArrayOf(.53f, .58f, .48f, .22f), floatArrayOf(.66f, .66f, .36f, .26f),
-    floatArrayOf(.78f, .52f, .52f, .21f), floatArrayOf(.90f, .64f, .40f, .24f),
-)
-
-@Composable
-internal fun WorldBrowserBackdrop(modifier: Modifier = Modifier, lights: List<WorldLight> = emptyList(),
-    scrollOffset: () -> Float = { 0f }) {
-    val mist = rememberArtwork("browser-mist-v1")
-    val clearing = remember { SoftLight(Color.Black, floatArrayOf(0f, 1f), floatArrayOf(.40f, 0f)) }
-    val glows = remember { HashMap<Color, SoftLight>() }
-    val clouds = remember { HashMap<Color, SoftLight>() }
-    Canvas(modifier) {
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF182633), Color(0xFF26313C), Color(0xFF14242C))))
-        val canvas = drawContext.canvas.nativeCanvas
-        if (mist != null) {
-            // The isolated mist layer lets local masks thin fog without erasing the base scene.
-            drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
-            // Scroll-driven only: no idle animation loop, and reduced motion supplies zero.
-            // The painted mist itself drifts; no synthetic layers slide across it.
-            val phase = scrollOffset() / (size.height.coerceAtLeast(1f) * .8f)
-            val overscan = 24.dp.toPx()
-            val drift = kotlin.math.sin(phase) * overscan * .65f
-            drawImage(mist,
-                dstOffset = IntOffset(-overscan.roundToInt(), (-overscan + drift).roundToInt()),
-                dstSize = IntSize((size.width + overscan * 2).roundToInt(),
-                    (size.height + overscan * 2).roundToInt()), alpha = .92f)
-            lights.forEach { light ->
-                clearing.draw(canvas, light.bounds.center.x, light.bounds.center.y, light.bounds.width * .76f, erase = true)
-            }
-            drawContext.canvas.restore()
-        }
-        lights.forEach { light ->
-            val center = light.bounds.center
-            val width = light.bounds.width
-            if (width <= 0f) return@forEach
-            if (light.cloud) {
-                // A bank of fog lit from inside by the world's colour, moving with its entrance.
-                val lobe = clouds.getOrPut(light.color) {
-                    SoftLight(lerp(light.color, Color.White, .12f), floatArrayOf(0f, .45f, 1f), floatArrayOf(.38f, .20f, 0f))
-                }
-                CloudLobes.forEach { (turn, distance, radiusX, radiusY) ->
-                    val angle = turn * 2 * Math.PI.toFloat()
-                    lobe.draw(canvas,
-                        center.x + kotlin.math.cos(angle) * width * distance,
-                        center.y + kotlin.math.sin(angle) * light.bounds.height * distance,
-                        width * radiusX, width * radiusY)
-                }
-            }
-            val glow = glows.getOrPut(light.color) {
-                SoftLight(light.color, floatArrayOf(0f, .48f, .78f, 1f), floatArrayOf(.70f, .52f, .18f, 0f))
-            }
-            glow.draw(canvas, center.x, center.y, width * if (light.cloud) .86f else .80f,
-                strength = if (light.cloud) 1f else .8f)
-        }
-        drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .10f), Color.Transparent, Color.Black.copy(alpha = .15f))))
-    }
 }
 
 /** Two width-scaled edge layers, separated by transparent sky. Never cover-crop a screen. */

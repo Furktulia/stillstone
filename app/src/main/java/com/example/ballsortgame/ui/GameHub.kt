@@ -84,14 +84,15 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
     BackHandler(enabled = !browseWorlds) {
         openBrowser(if (mode) null else world.levels[worldState.levelIndex].worldId)
     }
-    WorldTheme(if (mode) "three" else world.levels[worldState.levelIndex].worldId) {
+    WorldTheme(if (mode) "endless" else world.levels[worldState.levelIndex].worldId) {
         Surface(Modifier.fillMaxSize(), color = LocalWorldLook.current.base) {
             if (!browseWorlds) {
                 if (!mode) {
                     GameScreen(worldState, world, browse = { openBrowser(world.levels[worldState.levelIndex].worldId) })
                 } else {
                     Column(Modifier.fillMaxSize()) {
-                        if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().statusBarsPadding())
+                        if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().statusBarsPadding(),
+                            color = LocalWorldLook.current.accent.copy(alpha = .6f), trackColor = androidx.compose.ui.graphics.Color.Transparent)
                         if (state.error.isNotEmpty()) Text(state.error, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error)
                         if (message.isNotEmpty()) Text(message, Modifier.padding(horizontal = 20.dp))
                         val game = state.game
@@ -107,7 +108,7 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                                     extraAction = { menu = true })
                             }
                         } else Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            if (state.busy) CircularProgressIndicator()
+                            if (state.busy) CircularProgressIndicator(color = LocalWorldLook.current.accent.copy(alpha = .6f), strokeWidth = 2.dp)
                             else NightButton("Try another puzzle", onClick = { newPuzzle() })
                         }
                     }
@@ -130,48 +131,48 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
         }
     if (menu) NightDialog(onDismissRequest = { menu = false }, title = { Text("Infinite play") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            TextButton(onClick = {
+            NightMenuRow(state.code.ifEmpty { "Preparing puzzle…" }, detail = "Tap to copy this puzzle's code") {
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                     .setPrimaryClip(ClipData.newPlainText("Puzzle code", state.code))
                 message = "Code copied."
-            }) { Text(state.code.ifEmpty { "Preparing puzzle…" } + " · Copy") }
+            }
+            Spacer(Modifier.height(6.dp))
             // Wraps instead of clipping a label on narrow dialogs or with large text.
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for ((letter, title) in listOf("R" to "Relaxed", "B" to "Balanced", "C" to "Challenge")) {
-                    FilterChip(recipe == letter, { recipe = letter; preferences.edit().putString("recipe", letter).apply() },
-                        label = { Text(title, maxLines = 1) }, modifier = Modifier.testTag("recipe_$letter"))
+                    NightChip(title, recipe == letter, Modifier.padding(vertical = 4.dp).testTag("recipe_$letter")) {
+                        recipe = letter; preferences.edit().putString("recipe", letter).apply() }
                 }
             }
             Text(when (recipe) {
                 "R" -> "A simple approach nearly always works."
                 "C" -> "Tempting moves can lose the puzzle. Expect to use Undo."
                 else -> "Some choices matter, and a few can be dead ends."
-            } + " Applies from the next new puzzle.", style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { newPuzzle(); menu = false }, enabled = !state.busy) { Text("Skip / new puzzle") }
-            TextButton(onClick = { enter = true; menu = false }) { Text("Enter puzzle code") }
-            TextButton(onClick = { bookmark = true; menu = false }, enabled = state.game != null) { Text("Save example") }
-            TextButton(onClick = { scope.launch { saved = withContext(Dispatchers.IO) { endless.examples().lines().filter { it.isNotBlank() } } }; menu = false }) { Text("Saved examples") }
-            TextButton(onClick = { export.launch("ball-sort-examples.ndjson"); menu = false }) { Text("Export saved examples") }
+            } + " Applies from the next new puzzle.", Modifier.padding(top = 6.dp, bottom = 8.dp), style = MaterialTheme.typography.bodySmall)
+            NightMenuRow("New puzzle", enabled = !state.busy) { newPuzzle(); menu = false }
+            NightMenuRow("Enter a puzzle code") { enter = true; menu = false }
+            NightMenuRow("Save this puzzle", enabled = state.game != null) { bookmark = true; menu = false }
+            NightMenuRow("Saved puzzles") { scope.launch { saved = withContext(Dispatchers.IO) { endless.examples().lines().filter { it.isNotBlank() } } }; menu = false }
+            NightMenuRow("Export saved puzzles") { export.launch("ball-sort-examples.ndjson"); menu = false }
         }
     }, confirmButton = { NightDialogAction("Done", primary = true) { menu = false } })
     saved?.let { examples ->
-        NightDialog(onDismissRequest = { saved = null }, title = { Text("Saved examples") },
+        NightDialog(onDismissRequest = { saved = null }, title = { Text("Saved puzzles") },
             text = { androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 400.dp)) {
-                if (examples.isEmpty()) item { Text("No examples saved yet.") }
+                if (examples.isEmpty()) item { Text("No puzzles saved yet.") }
                 items(examples.size) { index ->
                     val value = org.json.JSONObject(examples[index])
-                    TextButton(onClick = { endless.loadSaved(examples[index]); saved = null }) {
-                        Text(value.optString("code") + " · " + value.optString("quality") + "\n" + value.optString("note"))
-                    }
+                    NightMenuRow(value.optString("code"), detail = listOf(value.optString("quality"), value.optString("note")).filter { it.isNotBlank() }.joinToString(" · ")) {
+                        endless.loadSaved(examples[index]); saved = null }
                 }
             } }, confirmButton = { NightDialogAction("Done", primary = true) { saved = null } })
     }
     if (enter) NightDialog(onDismissRequest = { enter = false }, title = { Text("Replay a code") },
-        text = { OutlinedTextField(code, { code = it }, label = { Text("For example E2-B-1") }) },
+        text = { NightTextField(code, { code = it }, "For example E2-B-1") },
         confirmButton = { NightDialogAction("Load", primary = true) { newPuzzle(code); enter = false } },
         dismissButton = { NightDialogAction("Cancel") { enter = false } })
-    if (bookmark) NightDialog(onDismissRequest = { bookmark = false }, title = { Text("Save this example") },
-        text = { Column { Text("Hard can be good. Describe what worked or felt wrong."); OutlinedTextField(note, { note = it }, label = { Text("Optional note") }) } },
+    if (bookmark) NightDialog(onDismissRequest = { bookmark = false }, title = { Text("Save this puzzle") },
+        text = { Column { Text("Hard can be good. Describe what worked or felt wrong."); Spacer(Modifier.height(10.dp)); NightTextField(note, { note = it }, "Optional note") } },
         confirmButton = { NightDialogAction("Good example") { endless.bookmark("good", note) { message = it }; bookmark = false; note = "" } },
         dismissButton = { NightDialogAction("Needs work") { endless.bookmark("needs-work", note) { message = it }; bookmark = false; note = "" } })
     }

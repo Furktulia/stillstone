@@ -5,6 +5,84 @@ sheets into phone screens. Those sheets are references only now and are excluded
 from the APK. Visual quality still needs the user's review; functional tests are
 not approval of the art direction.
 
+## World screen as one journey (2026-11-13, replaces the entrance badges)
+
+The creator judged the entrance badges to be early placeholders: detailed pictures
+floating in undetailed fog. The world screen is now a single scrolling scene
+(`WorldVistas.kt`, `WorldVistaSection`), and everything below in this document that
+describes entrances, mist, halos or fog drift is history.
+
+- Four full-width stretches: Dusk, Moonlight, Midnight, Infinite. Each is 46% of the
+  screen height (at least 300 dp), so a little over two are visible and the next one
+  shows there is more below.
+- A stretch is a native sky gradient with its own light, seeded stars and (Moonlight)
+  a crescent, the world's name in the display serif with "N of M sorted", and the
+  lower half of that world's existing wide painting (`*-wide-v2`) along the bottom.
+  These are the paintings the level lists already use, so no new art was generated
+  and a world looks like the same place on every screen.
+- The painting's top edge is faded into the sky, and its ground dissolves into the
+  next world's sky colour, so there is no seam between stretches.
+- Infinite has no ground: a drawn infinity sign among denser stars.
+- The whole stretch is the button (tag `world_<id>`). Resume is a small stone at the
+  top left (tag `world_close`), where Back sits on other screens; the gear is top right.
+- Nothing animates or redraws while idle. The old per-frame mist layer and erase masks
+  are gone, which removes the one costly spot noted in the battery review.
+
+No longer packaged (sources remain in app/artwork as history): the `*-depth-*`
+entrances, `infinite-entry-v1` and `browser-mist-v1`. Nine assets are active.
+Status: reviewed only on the emulator by the agent; the creator has not approved it.
+
+## The other screens brought into the same style (2026-11-13)
+
+Creator approved the world screen on the emulator ("looks really good") and asked for
+the rest to follow. All of this is emulator-reviewed by the agent only.
+
+- **Returning to the world screen** no longer flashes infinity signs: decoded art is
+  read from the cache in the first frame (`WorldArtwork.ready`), and the sign is drawn
+  only for the stretch that has no painting.
+- **Play screen** (`PlayBackdrop` in WorldVistas.kt, replacing the blurred frame): the
+  world's own sky, darkened, a few very faint stars, and its landscape low and dim
+  under the controls. No blur layer.
+- **Infinite has its own look** (`worldLook("endless")`: indigo with violet light),
+  matching its stretch on the world screen, instead of borrowing Dusk's.
+- **Board position** (`boardGeometry`): a row is only as tall as its tubes plus one
+  stone of air; spare height is shared above and below. Small boards sit mid-screen
+  and rows stay together. Pattern and connected layouts are unchanged.
+- **Status line** is centred; **Next puzzle** is a centred stone, not a full-width bar.
+- **Level list**: stones dissolve before reaching the floating Worlds and gear buttons;
+  the fade grows with the first scroll so nothing pops.
+- **Infinite options, saved puzzles, code entry and the sound panel** use the game's
+  own controls from NightUi.kt (`NightMenuRow`, `NightChip`, `NightRadio`,
+  `NightSlider`, `NightTextField`) instead of stock Material ones. Debug-flavoured
+  wording was replaced ("Stone sound", "Saved puzzles", "New puzzle").
+
+### Creator corrections to the above (2026-11-13, same day)
+
+- **Board position reverted.** Tubes rest low again. The creator plays on large phones
+  (S25+, A51s) and wants interaction in the lower half. Do not centre the board.
+- **Level list fade:** stones start to thin beside the floating buttons but are only
+  gone at the screen edge; they must not vanish before reaching the buttons.
+- **No jump on completion:** the status line is a fixed 60 dp slot that holds either
+  text or the Next puzzle stone. "Nicely sorted." was dropped.
+- **Counts say "6 of 47"**, without "sorted": most modes are no longer plain sorting.
+- **Level screen as a path (LevelPath.kt), prototype awaiting review.** A flat chat
+  mock was rejected as "soulless, minimalistic": this screen must be relaxing and
+  atmospheric like the paintings, not minimal. The prototype replaces the grid with
+  stones along one winding trail (three per row, alternating direction) through the
+  world's painting: finished stones glow, the trail between two finished stones is
+  lit, the level being played has a halo, and static motes drift over each world
+  (fireflies at dusk). It opens at the level being played. The mode mark is centred
+  under the number; Sealed is a corked tube; Pattern is a column of three coloured
+  stones; the challenge peak sits in its own plate on top of the rim. Screenshots of
+  the prototype are in docs/mocks/. Nothing animates while idle.
+  Creator's second pass: glow and lights are good, the trail was too crowded. Now only
+  two small stones between neighbours, none touching, no ribbon, fewer motes, smaller
+  level stones. All marks are the same monochrome line style (Pattern lost its colours);
+  Hidden is a ringed question mark.
+- **Press feel** (`Modifier.pressSink` in NightUi.kt): stone buttons, level stones and
+  the world titles sink and spring back; a pressed stone darkens instead of whitening.
+- **Header position** is the same on the world screen, level screen and play screen.
+
 ## Phone follow-up: scrolling, light and lettering
 
 The browser list now fills the entire window. Its top/bottom clip and short mist
