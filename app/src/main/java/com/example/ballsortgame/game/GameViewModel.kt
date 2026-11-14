@@ -164,7 +164,7 @@ class GameViewModel(
             publish(
                 selected = index.takeIf { before.tubes[it].balls.isNotEmpty() },
                 message = when {
-                    !rules.connected(selected, index) -> "Cross through the shared tube."
+                    !rules.connected(selected, index) -> "The middle tube is in the way. Empty it to cross."
                     rules.singleStone -> "That tube is full."
                     else -> "Choose an empty tube or a matching top color with room."
                 },

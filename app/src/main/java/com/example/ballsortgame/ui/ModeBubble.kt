@@ -32,9 +32,9 @@ import com.example.ballsortgame.ui.theme.GameDisplayFont
 
 /** What makes a level differ from plain sorting, in the player's words. */
 internal enum class LevelTrait(val title: String, val explanation: String) {
-    MIXED("Mixed sizes", "Some tubes are shorter than others. A color may finish in more than one full tube."),
+    MIXED("Mixed sizes", "Some tubes are shorter than others. Use them as room to work: each color still has to end up together in one tube."),
     SEALED("Sealed tubes", "A sealed tube opens once enough other tubes are complete. The stones inside still need sorting."),
-    CONNECTED("Connected boards", "Two boards and one tube between them. Stones cross from side to side only through that middle tube."),
+    CONNECTED("Connected boards", "Two boards with one tube between them. While the middle tube is empty, stones cross over it in one move. Park anything in it and the way across is closed."),
     PATTERN("Restore a pattern", "Move one stone at a time, onto any color, until the tubes match the small arrangement at the top."),
     HIDDEN("Hidden colors", "Only the top stone of each tube shows its color. The ones beneath appear as you uncover them."),
     CHALLENGE("Challenge", "Harder than the levels around it. It is optional: skip it and come back whenever you like."),

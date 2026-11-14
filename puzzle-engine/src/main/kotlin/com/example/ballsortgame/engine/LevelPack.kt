@@ -140,8 +140,14 @@ object BundledLevelPacks {
     fun playtestV3(): LevelPack = read("playtest-v3.txt")
     /** The campaign with four optional modes woven into each world's run (2026-11-12). */
     fun playtestV5(): LevelPack = read("playtest-v5.txt")
-    /** The current campaign: v5 unchanged, with many more plain sorting levels woven in (2026-11-13). */
-    fun playtest(): LevelPack = read("playtest-v6.txt")
+    /** v5 unchanged, with many more plain sorting levels woven in (2026-11-13). */
+    fun playtestV6(): LevelPack = read("playtest-v6.txt")
+    /**
+     * The current campaign (2026-11-14): rebuilt after play. Roles come from measurement, each
+     * world's run is re-ordered to rise toward medium levels, mixed sizes gather every colour
+     * in one tube, sealed tubes always hold a mix, and connected boards are new.
+     */
+    fun playtest(): LevelPack = read("playtest-v7.txt")
     fun difficultyStudy(): LevelPack = read("difficulty-study-v1.txt")
     private fun read(name: String): LevelPack =
         requireNotNull(BundledLevelPacks::class.java.getResourceAsStream("/levels/$name")) {

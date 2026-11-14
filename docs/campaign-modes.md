@@ -114,3 +114,53 @@ anywhere and then moved home in one group move, so it does not change how a leve
 played; making home tubes refuse other colours only removes spare tubes, which is a
 harder plain level, not a new idea. All four were removed from the code. Do not rebuild
 them without a rule that changes strategy.
+
+## Campaign rebuild after play (2026-11-14): playtest-v7
+
+The creator played v6 and found: a sealed tube holding an already sorted colour; a mode
+first met combined with another; a trivial level marked challenge and a medium one not;
+mixed sizes ending two different ways; connected boards that were only extra taps; no
+challenge in Midnight until level 42; late levels too easy. `playtest-v7.txt` is the
+answer (`BundledLevelPacks.playtest()`; v6 stays as `playtestV6()`), built by the
+`campaign-rebuild` lab command (CampaignRebuild.kt), about 11 minutes:
+
+```
+.\gradlew.bat :puzzle-engine:run --args="campaign-rebuild --attempts 600 --classic-attempts 900 --output build/puzzle-lab/my-rebuild"
+```
+
+- **Roles are measured**, no longer taken from a generator's list position. Score = how
+  often simple play fails the level: under 0.15 relaxed, up to 0.80 regular, above that
+  challenge. Plain levels use PuzzleAnalyzer; mode levels use the plain player in
+  ModeCampaign over the full state graph; patterns use length only.
+- **Pacing:** 246 levels (Dusk 81, Moonlight 83, Midnight 82). Each run starts relaxed,
+  regular levels grow more common (position follows a square-root curve), and challenges
+  are spread from about a quarter of the way in (first at level 19-20), the hardest
+  last. Challenges alternate which mode they come from.
+- **Modes met alone:** mixed, hidden, sealed, connected, pattern each first appear by
+  themselves through their gentlest level, one at a time. A combined level always comes
+  after both parts.
+- **Mixed sizes:** rule `gather` (pack text `gather`): every colour must end in ONE tube.
+  Same boards and IDs as before, re-solved for that goal.
+- **Sealed tubes** always hold at least two colours; the others were replaced.
+- **Connected boards are all new.** Rule change: a stone crosses the middle tube in one
+  move while it is empty; anything parked in it closes the crossing. Shores have little
+  or no spare room, and every level is PROVEN unsolvable with the middle tube removed
+  (which is exactly "never parking in it"). The plain player rates these harder than
+  they probably play, so they were picked from the gentler half of what was found.
+- **Plain levels:** the eight shortest recently added calm levels per world were dropped;
+  about ten regular (BALANCED tier) and up to two challenge levels were added per world.
+- LevelPackTest states all of the above as rules for the current pack.
+
+Consequences to know: levels that were replaced or dropped lose their saved progress, and
+a save whose current level was replaced opens on the world's first level (the session
+repairs this by design). Nothing in v7 has been playtested by a person.
+
+## Level stones (2026-11-14)
+
+Finished levels have no tick. Three looks were captured for the creator (FinishedLook in
+LevelPath.kt); they chose the glow: **LANTERN**. A finished stone is lit warm from
+within, its number and rim turn warm, and warm light lies on the ground; neighbouring
+lights are combined with "lighten", so a run of finished levels is one soft field without
+hot spots, and the first and last rows let the light spill past their edge. The challenge
+badge is pale blue so it cannot be mistaken for that light. A level shows a mark for each
+of its traits (up to two). SETTLED and MOONLIT remain in the code as alternatives.

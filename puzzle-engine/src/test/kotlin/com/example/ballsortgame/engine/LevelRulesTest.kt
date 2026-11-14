@@ -48,14 +48,29 @@ class LevelRulesTest {
         assertTrue(rules.sealed(4, position.open))
     }
 
-    @Test fun shoresTradeOnlyThroughTheSharedTube() {
-        val start = board(2 to listOf(0, 1), 2 to emptyList(), 2 to listOf(1, 0))
+    @Test fun shoresCrossOverTheSharedTubeOnlyWhileItIsEmpty() {
+        val start = board(2 to listOf(0, 1), 2 to emptyList(), 2 to listOf(1))
         val rules = LevelRules(bridge = Bridge(setOf(0), 1))
         assertEquals(LevelMode.CONNECTED, rules.mode(start))
-        assertNull(rules.transfer(rules.start(start), Move(0, 2)))
+        // Empty in the middle: straight across in one move.
+        assertNotNull(rules.transfer(rules.start(start), Move(0, 2)))
         assertNotNull(rules.transfer(rules.start(start), Move(0, 1)))
-        assertNotNull(rules.transfer(rules.start(start), Move(2, 1)))
-        assertFalse(Move(0, 2) in rules.legalMoves(rules.start(start)))
+        // A stone resting in the middle blocks the crossing; the shores can still reach the middle.
+        val parked = board(2 to listOf(0, 1), 2 to listOf(1), 2 to listOf(1))
+        assertNull(rules.transfer(rules.start(parked), Move(0, 2)))
+        assertFalse(Move(0, 2) in rules.legalMoves(rules.start(parked)))
+        assertNotNull(rules.transfer(rules.start(parked), Move(0, 1)))
+        assertNotNull(rules.transfer(rules.start(parked), Move(2, 1)))
+    }
+
+    @Test fun gatheringMeansOneTubePerColour() {
+        val split = board(3 to listOf(0, 0, 0), 2 to listOf(1, 1), 1 to listOf(1), 3 to emptyList())
+        assertTrue("plain sorting accepts a colour split over two short full tubes", LevelRules.CLASSIC.solved(split))
+        val rules = LevelRules(gather = true)
+        assertFalse(rules.solved(split))
+        assertTrue(rules.solved(board(3 to listOf(0, 0, 0), 2 to emptyList(), 1 to emptyList(), 3 to listOf(1, 1, 1))))
+        assertFalse(rules.isClassic)
+        assertEquals(rules, LevelRules.decode(rules.encode()))
     }
 
     @Test fun patternLevelsMoveOneStoneOntoAnythingAndFinishOnlyAtTheExactArrangement() {

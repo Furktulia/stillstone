@@ -33,14 +33,18 @@ import com.example.ballsortgame.game.PlayableLevel
 
 @Composable
 fun WorldPicker(levels: List<PlayableLevel>, state: GameUiState, onDismiss: () -> Unit, choose: (Int) -> Unit,
-    initialWorld: String? = null, onInfinite: (() -> Unit)? = null, onSettings: (() -> Unit)? = null) {
+    initialWorld: String? = null, onInfinite: (() -> Unit)? = null, onSettings: (() -> Unit)? = null,
+    /** What the system Back does on the world screen itself. The main screen is the top: Back leaves the app. */
+    onBack: (() -> Unit)? = null) {
     var selectedWorld by rememberSaveable { mutableStateOf(initialWorld) }
     val worlds = remember(levels) { levels.withIndex().groupBy { it.value.worldId } }
     val entries = worlds[selectedWorld]
     val id = selectedWorld ?: "three"
     val listState = rememberLazyListState()
     val listStates = worlds.keys.associateWith { rememberLazyListState() }
-    Dialog(onDismissRequest = { if (selectedWorld != null) selectedWorld = null else onDismiss() },
+    // Back always goes up: level list -> worlds -> out. It never returns to an earlier screen;
+    // the Resume stone is the way back into the puzzle.
+    Dialog(onDismissRequest = { if (selectedWorld != null) selectedWorld = null else (onBack ?: onDismiss)() },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         WorldTheme(id) {
             BoxWithConstraints(Modifier.fillMaxSize()) {

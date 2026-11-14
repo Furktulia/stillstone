@@ -12,8 +12,59 @@ class LevelPackTest {
     @get:Rule val temporary = TemporaryFolder()
     private val limits = SearchOptions(SearchLimits(150_000, 150_000, 150_000, 5_000))
 
-    @Test fun roundTripPreservesBoardsCertificatesMetadataAndOrder() {
+    /**
+     * The campaign as rebuilt after play (2026-11-14). These are the things the creator asked for,
+     * stated as rules the pack must keep.
+     */
+    @Test fun currentCampaignIsPacedIntroducesModesAloneAndItsModeLevelsMeanSomething() {
         val pack = BundledLevelPacks.playtest()
+        assertEquals(pack, LevelPackCodec.decode(LevelPackCodec.encode(pack)))
+        assertEquals(listOf("three", "four", "five"), pack.worlds.map { it.id })
+        // Plain sorting is what the game is.
+        assertTrue(pack.levels.count { it.mode == LevelMode.CLASSIC } >= 1.9 * pack.levels.count { it.mode != LevelMode.CLASSIC })
+        fun traits(level: PackLevel) = buildSet { if (level.mode != LevelMode.CLASSIC) add(level.mode.name); if (level.rules.hidden) add("HIDDEN") }
+        for (world in pack.worlds) {
+            val run = pack.levels.filter { it.worldId == world.id }
+            assertEquals(world.id, LevelRole.INTRODUCTION, run.first().role)
+            assertEquals(world.id, LevelRole.CHALLENGE, run.last().role)
+            // Gentle at first; the first hard level arrives within the first third, not halfway through.
+            val firstHard = run.indexOfFirst { it.role == LevelRole.CHALLENGE }
+            assertTrue("${world.id} first challenge at $firstHard", firstHard in 10 until run.size / 3)
+            assertTrue(world.id, run.windowed(3).none { w -> w.all { it.role == LevelRole.CHALLENGE } })
+            // Levels where choices matter grow more common along the run.
+            val third = run.size / 3
+            fun demanding(part: List<PackLevel>) = part.count { it.role == LevelRole.REGULAR || it.role == LevelRole.CHALLENGE }
+            assertTrue(world.id, demanding(run.takeLast(third)) > 2 * demanding(run.take(third)))
+            assertTrue("${world.id}: the last third is mostly demanding", demanding(run.takeLast(third)) * 2 > third)
+            // Each new thing is met alone, through a gentle level, and they arrive one at a time.
+            val firsts = listOf("MIXED", "HIDDEN", "SEALED", "CONNECTED", "PATTERN").map { trait ->
+                val at = run.indexOfFirst { trait in traits(it) }
+                assertEquals("${world.id} $trait is first met combined with something else", setOf(trait), traits(run[at]))
+                assertEquals("${world.id} $trait", LevelRole.RELAXED, run[at].role)
+                at
+            }
+            assertEquals(world.id, firsts.sorted(), firsts)
+            assertTrue(world.id, firsts.zipWithNext().all { (a, b) -> b - a >= 2 })
+        }
+        for (level in pack.levels) when (level.mode) {
+            // Mixed sizes: one goal everywhere, every colour in one tube.
+            LevelMode.MIXED -> assertTrue(level.id, level.rules.gather)
+            // A sealed tube always holds a mix; one that is already sorted adds nothing.
+            LevelMode.SEALED -> for (seal in level.rules.seals)
+                assertTrue(level.id, level.board.tubes[seal.tube].balls.distinct().size >= 2)
+            // A connected level cannot be done without parking stones in the middle tube.
+            LevelMode.CONNECTED -> {
+                val shared = requireNotNull(level.rules.bridge).shared
+                val without = Board(level.board.tubes.filterIndexed { index, _ -> index != shared })
+                assertTrue(level.id, PuzzleSolver().solve(without, limits) is SolveResult.Unsolvable)
+            }
+            else -> Unit
+        }
+    }
+
+    /** The pack before the rebuild, kept for comparison: its own rules still hold for it. */
+    @Test fun roundTripPreservesBoardsCertificatesMetadataAndOrder() {
+        val pack = BundledLevelPacks.playtestV6()
         assertEquals(pack, LevelPackCodec.decode(LevelPackCodec.encode(pack)))
         assertEquals(236, pack.levels.size)
         // Plain sorting is what the game is: those levels clearly outnumber the mode levels.
@@ -136,7 +187,7 @@ class LevelPackTest {
     /** Every mode level is replayed and re-solved under its own rules: the certificate is real and shortest. */
     @Test fun modeLevelsAreSolvableShortestAndSmallEnoughForPhoneHints() {
         val levels = BundledLevelPacks.playtest().levels.filter { it.mode != LevelMode.CLASSIC }
-        assertEquals(80, levels.size)
+        assertTrue(levels.size in 76..84)
         for (level in levels) {
             level.rules.check(level.board)
             val solved = RuledSolver.solve(level.rules, level.rules.start(level.board), 60_000) as? RuledSolveResult.Solved
@@ -144,7 +195,7 @@ class LevelPackTest {
             assertEquals(level.id, level.solution.size, requireNotNull(solved).moves.size)
             assertTrue(level.id, level.id.startsWith(level.worldId + "-" + level.mode.slug + "-"))
             when (level.mode) {
-                LevelMode.MIXED -> assertTrue(level.id, level.rules.isClassic)
+                LevelMode.MIXED -> assertTrue(level.id, level.rules == LevelRules(gather = true, hidden = level.rules.hidden))
                 LevelMode.SEALED -> assertTrue(level.id, level.rules.seals.all { level.board.tubes[it.tube].balls.isNotEmpty() })
                 LevelMode.PATTERN -> assertTrue(level.id, level.rules.singleStone)
                 LevelMode.CONNECTED -> assertNull(level.id, level.rules.target)

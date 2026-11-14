@@ -66,7 +66,7 @@ private fun gathered(board: Board): Int {
     return seen.size - loose.size
 }
 
-private fun plainSuccess(graph: RuledGraph, random: Random, trials: Int): Double {
+internal fun plainSuccess(graph: RuledGraph, random: Random, trials: Int): Double {
     var wins = 0
     repeat(trials) {
         var at = 0
@@ -106,7 +106,15 @@ private fun deal(stones: List<Int>, fill: List<Int>, capacities: List<Int>, rand
 private fun stones(colors: Int, each: Int) = (0 until colors).flatMap { color -> List(each) { color } }
 
 /** One random candidate of a pool, or null when this draw does not fit the tube size. */
-private fun candidate(pool: String, capacity: Int, random: Random): Triple<Board, LevelRules, String>? {
+internal fun candidate(pool: String, capacity: Int, random: Random): Triple<Board, LevelRules, String>? {
+    val drawn = draw(pool, capacity, random) ?: return null
+    // A sealed tube must hold a real mix. One that is already a single colour (or a lone stone)
+    // adds nothing: opening it changes nothing about how the level is played.
+    if (drawn.second.seals.any { drawn.first.tubes[it.tube].balls.distinct().size < 2 }) return null
+    return drawn
+}
+
+private fun draw(pool: String, capacity: Int, random: Random): Triple<Board, LevelRules, String>? {
     fun pick(vararg values: Int) = values[random.nextInt(values.size)]
     when (pool) {
         "mixed" -> {
@@ -119,7 +127,7 @@ private fun candidate(pool: String, capacity: Int, random: Random): Triple<Board
             val spares = shapes[random.nextInt(shapes.size)]
             val capacities = List(colors) { capacity } + spares
             val board = deal(stones(colors, capacity), List(colors) { capacity } + spares.map { 0 }, capacities, random)
-            return Triple(board, LevelRules.CLASSIC, "spares " + spares.joinToString("+"))
+            return Triple(board, LevelRules(gather = true), "spares " + spares.joinToString("+"))
         }
         "seal-one" -> {
             val colors = when (capacity) { 3 -> pick(4, 5); 4 -> 4; else -> pick(3, 4) }
@@ -155,8 +163,14 @@ private fun candidate(pool: String, capacity: Int, random: Random): Triple<Board
                 LevelRules(listOf(Seal(first, 1), Seal(first + 1, 2))), if (half) "two half seals" else "two full seals")
         }
         "connected" -> {
-            val (left, right) = listOf(2 to 2, 1 to 2, 2 to 1)[random.nextInt(if (capacity == 5) 3 else 2).let { if (capacity == 5 && it == 0) 1 else it }]
-            val (leftSpare, rightSpare) = listOf(1 to 1, 1 to 1, 0 to 1, 1 to 0)[random.nextInt(4)]
+            // Little or no room of their own: the middle tube is the place to work AND the way
+            // across, and it cannot be both at once. That is what makes these levels their own.
+            val (left, right) = when (capacity) {
+                3 -> listOf(2 to 2, 2 to 3, 3 to 2, 3 to 3)
+                4 -> listOf(2 to 2, 2 to 3, 3 to 2)
+                else -> listOf(2 to 2, 1 to 2, 2 to 1, 2 to 3)
+            }.let { it[random.nextInt(it.size)] }
+            val (leftSpare, rightSpare) = listOf(0 to 0, 0 to 0, 1 to 0, 0 to 1)[random.nextInt(4)]
             val colors = left + right
             val capacities = List(left + leftSpare + 1 + right + rightSpare) { capacity }
             val fill = List(left) { capacity } + List(leftSpare) { 0 } + listOf(0) + List(right) { capacity } + List(rightSpare) { 0 }
@@ -183,7 +197,7 @@ private fun candidate(pool: String, capacity: Int, random: Random): Triple<Board
     }
 }
 
-private fun measure(board: Board, rules: LevelRules, variant: String, random: Random, maxStates: Int): ModeMeasure? {
+internal fun measure(board: Board, rules: LevelRules, variant: String, random: Random, maxStates: Int): ModeMeasure? {
     if (rules.solved(board)) return null
     if (rules.target != null) {
         // The arrangement graph is far too large to enumerate; nothing in it is ever lost, so only the distance matters.

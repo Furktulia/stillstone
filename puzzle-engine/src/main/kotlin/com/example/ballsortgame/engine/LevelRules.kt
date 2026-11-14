@@ -16,7 +16,12 @@ data class Seal(val tube: Int, val need: Int) {
     init { require(tube >= 0 && need > 0) }
 }
 
-/** Two shores joined by one tube. Tubes in [left] and the remaining ones can only exchange stones through [shared]. */
+/**
+ * Two shores joined by one tube. Stones pass between a tube in [left] and one on the other
+ * shore only by way of [shared]: straight across in one move while it is empty, or by
+ * resting in it. Anything parked in the shared tube blocks the crossing, so it is either
+ * a place to put stones or the way over, never both at once.
+ */
 data class Bridge(val left: Set<Int>, val shared: Int) {
     init { require(left.isNotEmpty() && shared !in left) }
 }
@@ -41,13 +46,19 @@ data class LevelRules(
      * beneath are uncovered. Display only; which moves are allowed does not change.
      */
     val hidden: Boolean = false,
+    /**
+     * Every colour must finish in ONE tube. With tubes of equal size this is what sorting
+     * already means; with mixed sizes it stops a colour from counting as done while it is
+     * split over two short tubes, so the goal reads the same on every level.
+     */
+    val gather: Boolean = false,
 ) {
     init {
         require(seals.size <= 8 && seals.map { it.tube }.distinct().size == seals.size)
     }
 
     /** Ordinary sorting moves and goal. A hidden-colours level still plays by classic rules. */
-    val isClassic: Boolean get() = seals.isEmpty() && bridge == null && target == null && !singleStone
+    val isClassic: Boolean get() = seals.isEmpty() && bridge == null && target == null && !singleStone && !gather
 
     fun mode(board: Board): LevelMode = when {
         target != null -> LevelMode.PATTERN
@@ -75,7 +86,7 @@ data class LevelRules(
         return index >= 0 && open and (1 shl index) == 0
     }
 
-    /** Whether stones may pass directly between these two tubes, seals aside. */
+    /** Whether these two tubes stand next to each other: same shore, or one of them is the shared tube. */
     fun connected(source: Int, destination: Int): Boolean {
         val link = bridge ?: return true
         return source == link.shared || destination == link.shared || (source in link.left) == (destination in link.left)
@@ -94,7 +105,7 @@ data class LevelRules(
         val board = position.board
         if (move.source == move.destination || move.source !in board.tubes.indices || move.destination !in board.tubes.indices) return null
         if (sealed(move.source, position.open) || sealed(move.destination, position.open)) return null
-        if (!connected(move.source, move.destination)) return null
+        if (!connected(move.source, move.destination) && board.tubes[requireNotNull(bridge).shared].balls.isNotEmpty()) return null
         val result = if (!singleStone) PuzzleRules.transfer(board, move) ?: return null else {
             val source = board.tubes[move.source]
             val destination = board.tubes[move.destination]
@@ -119,7 +130,13 @@ data class LevelRules(
         }
     }
 
-    fun solved(board: Board): Boolean = target?.let { board == it } ?: board.isSolved
+    fun solved(board: Board): Boolean {
+        target?.let { return board == it }
+        if (!board.isSolved) return false
+        if (!gather) return true
+        val homes = board.tubes.filter { it.balls.isNotEmpty() }.map { it.balls.first() }
+        return homes.size == homes.distinct().size
+    }
 
     fun replay(board: Board, moves: List<Move>): RuledPosition =
         moves.fold(start(board)) { position, move ->
@@ -136,6 +153,7 @@ data class LevelRules(
         target?.let { goal -> add("target=" + goal.tubes.joinToString("|") { "${it.capacity}:${it.balls.joinToString(",")}" }) }
         if (singleStone) add("single")
         if (hidden) add("hidden")
+        if (gather) add("gather")
     }.joinToString(";")
 
     companion object {
@@ -148,6 +166,7 @@ data class LevelRules(
             var target: Board? = null
             var single = false
             var hidden = false
+            var gather = false
             for (token in text.split(';')) {
                 val name = token.substringBefore('=')
                 val value = token.substringAfter('=', "")
@@ -161,10 +180,11 @@ data class LevelRules(
                     })
                     "single" -> single = true
                     "hidden" -> hidden = true
+                    "gather" -> gather = true
                     else -> throw IllegalArgumentException("Unknown level rule: $name")
                 }
             }
-            return LevelRules(seals, bridge, target, single, hidden)
+            return LevelRules(seals, bridge, target, single, hidden, gather)
         }
     }
 }

@@ -63,6 +63,11 @@ button. Subsequent cold launches restore the last campaign or Infinite game.
 - Resume → previously active mode/board; browsing alone must not change that mode.
 - Infinite has its own fourth entrance. Its ⋯ menu holds seed/bookmark/export tools.
 - Settings uses the same minimal outline gear everywhere.
+- System Back (button or edge swipe) always goes UP, never to an earlier screen
+  (creator, 2026-11-14): dialog or note -> closes it; level -> its world's level list
+  (Infinite -> worlds); level list -> worlds; worlds -> leaves the app. The Resume stone
+  is the only way from the world screen back into the puzzle. The manifest opts in to the
+  system back gesture (enableOnBackInvokedCallback).
 
 **Superseded 2026-11-13:** the world screen is now one continuous painted journey of
 four full-width stretches (WorldVistas.kt); see the first section of world-ui.md.

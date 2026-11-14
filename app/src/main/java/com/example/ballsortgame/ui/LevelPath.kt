@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.Dp
@@ -35,6 +36,18 @@ import com.example.ballsortgame.game.PlayableLevel
 import com.example.ballsortgame.ui.theme.GameDisplayFont
 
 private val Columns = floatArrayOf(.21f, .50f, .79f)
+
+/**
+ * How a finished level looks. Three candidates under review (2026-11-14); none has a tick.
+ * - LANTERN: the stone is lit warm from within, its number turns warm, and warm light lies
+ *   on the ground around it. Lights of neighbouring stones join into one soft field.
+ * - SETTLED: finished stones sink back, dim and rimless, so what is left to play stands out.
+ * - MOONLIT: nothing but a warm number and a thin warm rim.
+ */
+internal enum class FinishedLook { LANTERN, SETTLED, MOONLIT }
+internal var finishedLook = FinishedLook.LANTERN
+private val LanternLight = Color(0xFFFFC27A)
+private val LanternInk = Color(0xFFFFE6BE)
 
 /** Where the [place]-th stone of [row] stands: rows run left to right, then back, like a path winding downhill. */
 private fun columnOf(row: Int, place: Int) = if (row % 2 == 0) place else 2 - place
@@ -106,6 +119,28 @@ internal fun LevelPath(world: String, name: String, entries: List<IndexedValue<P
                     val column = columnOf(r, place)
                     return Offset(left + wide * Columns[column], h / 2 + liftOf(r, column, h))
                 }
+                if (finishedLook == FinishedLook.LANTERN) {
+                    // Lantern light on the ground. Each row also draws the light of the rows next to it,
+                    // cut to its own bounds, and lights are combined by "lighten" instead of being added:
+                    // where two lanterns overlap the ground is as bright as the brighter one, never a hot spot.
+                    val reach = 98.dp.toPx()
+                    val lights = (r - 1..r + 1).flatMap { other ->
+                        rows.getOrNull(other).orEmpty().mapIndexedNotNull { place, entry ->
+                            val column = columnOf(other, place)
+                            if (entry.value.id in done) Offset(left + wide * Columns[column], (other - r) * h + h / 2 + liftOf(other, column, h)) else null
+                        }
+                    }
+                    // The first and last rows have no neighbour to carry their light on, so they may spill past their own edge.
+                    val above = if (r == 0) -reach else 0f
+                    val below = if (r == rows.lastIndex) h + reach else h
+                    if (lights.isNotEmpty()) clipRect(top = above, bottom = below) {
+                        drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, above, size.width, below), Paint())
+                        for (light in lights) drawCircle(Brush.radialGradient(
+                            listOf(LanternLight.copy(alpha = .26f), LanternLight.copy(alpha = .15f), LanternLight.copy(alpha = .05f), Color.Transparent), light, reach),
+                            reach, light, blendMode = BlendMode.Lighten)
+                        drawContext.canvas.restore()
+                    }
+                }
                 val motes = java.util.Random((world.hashCode() * 31 + r).toLong())
                 val mote = moteColor(world)
                 repeat(2) {
@@ -146,7 +181,7 @@ internal fun LevelPath(world: String, name: String, entries: List<IndexedValue<P
                         for (d in offsets) if (d in 0f..measure.length) {
                             val p = measure.getPosition(d)
                             if ((fromTop || clear(p, a)) && (toBottom || clear(p, b)))
-                                drawCircle(if (lit[i]) lerp(look.accent, Color.White, .4f).copy(alpha = .9f) else look.light.copy(alpha = .34f),
+                                drawCircle(if (lit[i]) (if (finishedLook == FinishedLook.SETTLED) look.light.copy(alpha = .5f) else lerp(LanternLight, Color.White, .25f).copy(alpha = .9f)) else look.light.copy(alpha = .34f),
                                     (if (lit[i]) 1.7f else 1.3f).dp.toPx(), p)
                         }
                         k++
@@ -162,7 +197,7 @@ internal fun LevelPath(world: String, name: String, entries: List<IndexedValue<P
                         Modifier.offset(x = trackLeft + trackWidth * Columns[column] - hit / 2,
                             y = with(androidx.compose.ui.platform.LocalDensity.current) { liftOf(r, column, rowHeight.toPx()).toDp() })
                             .size(hit, rowHeight).testTag("level_${entry.index}"),
-                        traitsOf(entry.value).firstOrNull { it != LevelTrait.CHALLENGE }, entry.value.challenge) { choose(entry.index) }
+                        traitsOf(entry.value).filter { it != LevelTrait.CHALLENGE }, entry.value.challenge) { choose(entry.index) }
                 }
             }
         }
@@ -179,19 +214,24 @@ private fun DrawScope.stoneOutline(w: Float, h: Float, bevel: Float) = Path().ap
 }
 
 /**
- * One level: a painted stone on the path. Its number is carved in the middle with the mode
- * mark beneath it. A finished stone is lit from within; the one being played is ringed with
- * light; a challenge wears a warm rim and a small peak that stands clear above it.
+ * One level: a painted stone on the path, its number in the middle and under it a mark for
+ * each thing that makes the level differ from plain sorting. The level being played is ringed
+ * with light; a challenge wears a warm rim and a small peak standing clear above it. How a
+ * finished level looks is [finishedLook].
  */
 @Composable
 private fun PathStone(number: Int, world: String, playing: Boolean, completed: Boolean, compact: Boolean, modifier: Modifier,
-    trait: LevelTrait?, challenge: Boolean, open: () -> Unit) {
+    traits: List<LevelTrait>, challenge: Boolean, open: () -> Unit) {
     val look = worldLook(world)
     val texture = rememberArtwork("stone-button-v1")
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
+    val style = finishedLook
+    val lantern = completed && style == FinishedLook.LANTERN
+    val settled = completed && style == FinishedLook.SETTLED && !playing
+    val warm = completed && style != FinishedLook.SETTLED
     Box(modifier.semantics(mergeDescendants = true) {
-        contentDescription = "Level $number" + (trait?.let { ", ${it.title}" } ?: "") + if (challenge) ", challenge" else ""
+        contentDescription = "Level $number" + traits.joinToString("") { ", ${it.title}" } + if (challenge) ", challenge" else ""
         selected = playing
         stateDescription = if (completed) "Completed" else if (playing) "Playing" else "Available"
     }.clickable(interactionSource = source, indication = null, role = Role.Button, onClick = open),
@@ -199,48 +239,56 @@ private fun PathStone(number: Int, world: String, playing: Boolean, completed: B
         Canvas(Modifier.size(width = if (compact) 70.dp else 76.dp, height = if (compact) 58.dp else 64.dp).pressSink(pressed, .92f)) {
             val w = size.width; val h = size.height
             val centre = Offset(w / 2, h / 2)
-            val ember = lerp(look.accent, Color(0xFFF0C58A), .7f)
-            // Light on the ground around a stone that is finished or being played.
-            if (completed || playing) drawCircle(Brush.radialGradient(
-                listOf((if (playing) look.light else look.accent).copy(alpha = if (playing) .34f else .28f), Color.Transparent), centre, w * .95f), w * .95f, centre)
+            // A challenge is marked in a cool, pale blue: the colour of a far peak, and nothing like
+            // the warm light of a finished level, so the two can never be mistaken for each other.
+            val ember = Color(0xFFBFE3FF)
+            if (playing) drawCircle(Brush.radialGradient(listOf(look.light.copy(alpha = .34f), Color.Transparent), centre, w * .95f), w * .95f, centre)
             // A soft shadow so the stone sits on the path instead of floating over it.
-            drawOval(Color.Black.copy(alpha = .28f), Offset(w * .10f, h * .62f), Size(w * .80f, h * .42f))
+            drawOval(Color.Black.copy(alpha = if (settled) .16f else .28f), Offset(w * .10f, h * .62f), Size(w * .80f, h * .42f))
             val p = stoneOutline(w, h, if (world == "five") .16f else .24f)
-            val lift = if (completed) .12f else 0f
+            val body = if (settled) .55f else 1f
             drawPath(p, Brush.linearGradient(listOf(
-                lerp(look.base, look.light, .27f + lift),
-                lerp(look.base, look.light, .12f + lift), lerp(look.base, Color.Black, .16f))))
+                lerp(look.base, look.light, .27f), lerp(look.base, look.light, .12f), lerp(look.base, Color.Black, .16f))), alpha = body)
             if (texture != null) clipPath(p) {
                 drawImage(texture, srcOffset = IntOffset(texture.width / 3, 0), srcSize = IntSize(texture.width / 3, texture.height),
-                    dstSize = IntSize(w.toInt(), h.toInt()), alpha = if (completed) 1f else .80f)
+                    dstSize = IntSize(w.toInt(), h.toInt()), alpha = .80f * body)
+                // A lantern: warm light inside the stone, brightest low in the middle like a flame behind paper.
+                if (lantern) drawRect(Brush.radialGradient(
+                    listOf(LanternLight.copy(alpha = .62f), LanternLight.copy(alpha = .26f), LanternLight.copy(alpha = .08f)),
+                    Offset(w * .5f, h * .60f), w * .62f))
             }
-            drawPath(p, when {
+            if (!settled) drawPath(p, when {
                 challenge -> ember.copy(alpha = .85f)
                 playing || pressed -> look.light.copy(alpha = .92f)
-                else -> look.accent.copy(alpha = if (completed) .50f else .28f)
+                warm -> LanternLight.copy(alpha = .70f)
+                else -> look.accent.copy(alpha = .28f)
             }, style = Stroke(if (playing || challenge) 1.6.dp.toPx() else .8.dp.toPx()))
             if (playing && challenge) drawPath(p, look.light.copy(alpha = .55f), style = Stroke(.8.dp.toPx()))
-            val edgeLight = Path().apply {
-                moveTo(w * .15f, h * .44f)
-                cubicTo(w * .15f, h * .17f, w * .44f, h * .09f, w * .67f, h * .14f)
+            if (!settled) {
+                val edgeLight = Path().apply {
+                    moveTo(w * .15f, h * .44f)
+                    cubicTo(w * .15f, h * .17f, w * .44f, h * .09f, w * .67f, h * .14f)
+                }
+                drawPath(edgeLight, look.light.copy(alpha = .16f), style = Stroke(.8.dp.toPx(), cap = StrokeCap.Round))
             }
-            drawPath(edgeLight, look.light.copy(alpha = .16f), style = Stroke(.8.dp.toPx(), cap = StrokeCap.Round))
-            // What kind of level this is, carved under the number.
-            if (trait != null) drawTraitMark(trait, Offset(w * .50f, h * .735f), 13.dp.toPx(), look.light.copy(alpha = .86f))
+            // What kind of level this is, carved under the number: one mark for each thing it asks.
+            val ink = (if (warm) LanternInk else look.light).copy(alpha = if (settled) .40f else .86f)
+            val shown = traits.take(2)
+            shown.forEachIndexed { index, trait ->
+                val x = w * .50f + (index - (shown.size - 1) / 2f) * 17.dp.toPx()
+                drawTraitMark(trait, Offset(x, h * .735f), 13.dp.toPx(), ink)
+            }
             // The peak stands on top of the rim in its own small plate, so the rim never cuts through it.
             if (challenge) {
                 val plate = Size(24.dp.toPx(), 15.dp.toPx())
                 val corner = Offset(w * .50f - plate.width / 2, h * .075f - plate.height / 2)
                 drawRoundRect(lerp(look.base, look.light, .10f), corner, plate, CornerRadius(plate.height / 2))
-                drawRoundRect(ember.copy(alpha = .85f), corner, plate, CornerRadius(plate.height / 2), style = Stroke(1.2.dp.toPx()))
-                drawTraitMark(LevelTrait.CHALLENGE, Offset(w * .50f, h * .075f), 9.dp.toPx(), ember)
-            }
-            if (completed) {
-                val tick = Path().apply { moveTo(w * .69f, h * .76f); lineTo(w * .745f, h * .82f); lineTo(w * .84f, h * .69f) }
-                drawPath(tick, lerp(look.accent, Color.White, .3f), style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                drawRoundRect(ember.copy(alpha = if (settled) .45f else .85f), corner, plate, CornerRadius(plate.height / 2), style = Stroke(1.2.dp.toPx()))
+                drawTraitMark(LevelTrait.CHALLENGE, Offset(w * .50f, h * .075f), 9.dp.toPx(), ember.copy(alpha = if (settled) .5f else 1f))
             }
         }
-        Text(number.toString(), Modifier.offset(y = if (trait != null) (-8).dp else 0.dp).pressSink(pressed, .92f),
-            style = MaterialTheme.typography.titleLarge, fontFamily = GameDisplayFont, color = look.light)
+        Text(number.toString(), Modifier.offset(y = if (traits.isNotEmpty()) (-8).dp else 0.dp).pressSink(pressed, .92f),
+            style = MaterialTheme.typography.titleLarge, fontFamily = GameDisplayFont,
+            color = (if (warm) LanternInk else look.light).copy(alpha = if (settled) .42f else 1f))
     }
 }

@@ -120,7 +120,12 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
             choose = { world.chooseLevel(it); mode = false; browseWorlds = false },
             initialWorld = pickerWorld,
             onInfinite = { mode = true; browseWorlds = false },
-            onSettings = { browserSettings = true })
+            onSettings = { browserSettings = true },
+            onBack = {
+                var owner: Context? = context
+                while (owner is android.content.ContextWrapper && owner !is android.app.Activity) owner = owner.baseContext
+                (owner as? android.app.Activity)?.finish()
+            })
         if (browserSettings || browserCompare) {
             val activeGame = if (mode) state.game ?: world else world
             val ui by activeGame.state.collectAsStateWithLifecycle()

@@ -276,6 +276,15 @@ the system animation scale (zero under "Remove animations" and some power saving
 covered by SystemAnimationScaleTest. Unconfirmed until that phone runs this build. If
 it still fails, check the game's own Reduced motion setting next.
 
+2026-11-14 audit for older Android (minSdk 29): lint reports no API-level errors; the only
+version-dependent code is haptics, already guarded. The stone lift on selection was the
+last board motion on a Compose tween and is now frame-driven too, so no board motion
+follows the system animation scale. Still on that scale, deliberately cosmetic: the
+press spring on stone buttons and the fade of control names; with animations removed they
+snap. NOT verified on Android 14: only an API 37 emulator image is installed. To check on
+the A51s, or to reproduce on an emulator: Settings > Accessibility > Remove animations,
+or `adb shell settings put global animator_duration_scale 0` (1 restores it).
+
 Compact boards: the space above the board and between rows now scales with stone size
 (BoardGeometry) instead of a fixed 52/40 dp. Boards whose stones are at least about
 32 dp are unchanged; a 360x640 dp screen with 130% text and six five-slot tubes gets

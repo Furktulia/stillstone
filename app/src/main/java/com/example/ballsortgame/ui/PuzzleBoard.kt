@@ -65,8 +65,21 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
     val frames = groups.mapIndexed { index, group -> GroupFrame(group, flights[index].phase) }
     val impactCallback by rememberUpdatedState(onImpact)
     val contactCallback by rememberUpdatedState(onContact)
-    val selectionLift by animateFloatAsState(if (state.selected != null) 1f else 0f,
-        tween(if (state.reducedMotion) 0 else 150), label = "selection")
+    // Driven by frames, not by a Compose tween: a phone with system animations removed (some
+    // power-saving modes do this) would otherwise snap the lift. The game's own Reduced
+    // motion setting is the only switch for its motion.
+    val selectionLift = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(state.selected != null, state.reducedMotion) {
+        val goal = if (state.selected != null) 1f else 0f
+        if (state.reducedMotion) { selectionLift.floatValue = goal; return@LaunchedEffect }
+        var last = withFrameNanos { it }
+        while (selectionLift.floatValue != goal) {
+            val now = withFrameNanos { it }
+            val step = (now - last) / 150_000_000f
+            last = now
+            selectionLift.floatValue = if (goal > selectionLift.floatValue) minOf(goal, selectionLift.floatValue + step) else maxOf(goal, selectionLift.floatValue - step)
+        }
+    }
     BoxWithConstraints(modifier) {
         val width = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val height = constraints.maxHeight.toFloat().coerceAtLeast(1f)
@@ -296,7 +309,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                         pieceIndex >= maxOf(tube.balls.size - (if (rules.singleStone) 1 else tube.topRun), unseen(index))
                     val bounce = settling.offset(index, pieceIndex)
                     drawStone(
-                        Offset(geometry.centerX, geometry.pieceY(pieceIndex, density) - bounce - if (lifted) 7f * density * selectionLift else 0f),
+                        Offset(geometry.centerX, geometry.pieceY(pieceIndex, density) - bounce - if (lifted) 7f * density * selectionLift.floatValue else 0f),
                         geometry.slot, color, state.colorLabels, numberPaint, look.light,
                         veil = if (pieceIndex < unseen(index)) lerp(look.base, look.tube, 0.55f) else null,
                     )
