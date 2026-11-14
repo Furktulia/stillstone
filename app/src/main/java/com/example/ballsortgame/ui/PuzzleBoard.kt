@@ -29,8 +29,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import com.example.ballsortgame.game.GameUiState
 
-val PieceColors = listOf(Color(0xFFEB9791), Color(0xFF86CDB6), Color(0xFFE7C36D), Color(0xFF8CB7E8), Color(0xFFB7A0DE))
-val PieceNames = listOf("coral", "mint", "gold", "blue", "lilac")
+/**
+ * Stone colours, in the order levels number them. Every level must use only colours listed here:
+ * a missing one would silently repeat an earlier colour (PieceColorsTest checks every bundled pack).
+ * The sixth and later are chosen to stay apart from the first five: a deep rose that is neither coral
+ * nor lilac; a clear apricot, orange enough to stay apart from pink coral; a pale pearl.
+ */
+val PieceColors = listOf(Color(0xFFEB9791), Color(0xFF86CDB6), Color(0xFFE7C36D), Color(0xFF8CB7E8), Color(0xFFB7A0DE),
+    Color(0xFFD9799E), Color(0xFFF4A462), Color(0xFFE9E3D4))
+val PieceNames = listOf("coral", "mint", "gold", "blue", "lilac", "rose", "apricot", "pearl")
 
 private class GroupFlight {
     val progress = Animatable(0f)
@@ -118,12 +125,15 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
             }
         }
         var settlingFrame by remember { mutableIntStateOf(0) }
-        var settlingRunning by remember(settling) { mutableStateOf(false) }
+        // Each landing asks the settling loop to run. A counter, not an on/off flag: when the loop
+        // finished and a group landed in the same frame, the flag went false then true again, the
+        // effect saw no change and never restarted, and the board froze mid-bounce for good.
+        var settleRequests by remember(settling) { mutableIntStateOf(0) }
         var settledEpoch by remember { mutableIntStateOf(0) }
         val stationary = stationaryPieces(frames, state.board)
         stationary.forEachIndexed { tube, stones -> settling.sync(tube, stones.size) }
-        LaunchedEffect(settling, settlingRunning) {
-            if (!settlingRunning) return@LaunchedEffect
+        LaunchedEffect(settling, settleRequests) {
+            if (settleRequests == 0) return@LaunchedEffect
             var last = withFrameNanos { it }
             while (settling.awake) {
                 val now = withFrameNanos { it }
@@ -149,7 +159,6 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                 settlingFrame++
                 if (settling.awakeCount != moving) settledEpoch++ // A tube came to rest: its group can retire.
             }
-            settlingRunning = false
             settledEpoch++
         }
         groups.forEachIndexed { index, group ->
@@ -244,7 +253,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                             }
                             val rebound = LandingMotion.reboundHeight(drops[index], slot, group.count)
                             settling.land(destination, group.count, height, SettlingColumns.impactSpeed(rebound, slot))
-                            settlingRunning = true
+                            settleRequests++
                             flight.landed = true
                             impactCallback(LandingImpact(group.count, drops[index] / slot))
                         } else flight.landed = true

@@ -164,3 +164,25 @@ lights are combined with "lighten", so a run of finished levels is one soft fiel
 hot spots, and the first and last rows let the light spill past their edge. The challenge
 badge is pale blue so it cannot be mistaken for that light. A level shows a mark for each
 of its traits (up to two). SETTLED and MOONLIT remain in the code as alternatives.
+
+## Secret ice levels: tried and dropped (2026-11-15)
+
+Hidden side levels with an explicit move limit (melting ice tubes, a counter, a melt
+animation) were built on the `ice-levels-beta` branch and playtested. The creator's
+verdict: the move restriction does not work. Small boards were solvable at a glance, so
+the limit never bit; bigger boards chosen by player models still did not make it
+interesting. Everything ice-specific was removed and is not on this branch: the `melt`
+rule, ice tubes and collapse, the counter, secret-level discovery, the path crystal, the
+secret packs and their generator. The scrapped work is kept as a git stash on
+ice-levels-beta ("ice levels WIP (scrapped 2026-11-15)") and in that branch's commit.
+"No timers or artificial pressure" applies without exception again.
+
+Kept from that work:
+- **The Midnight trial board** as an ordinary final challenge of Midnight
+  (`five-peak-394154cb6402`, appended to playtest-v7; 21 moves, no limit).
+- **Eight stone colours** (PieceColors): coral, mint, gold, blue, lilac, then rose,
+  apricot and pearl. Before, a sixth colour silently drew as coral; ten Dusk levels have
+  six colours. PieceColorsTest fails if any bundled level uses a colour with no stone.
+- **Settling freeze fix** (PuzzleBoard): a landing in the same frame the settling loop
+  finished left stones frozen mid-bounce with no Next button. Landings now count up a
+  request number instead of flipping a flag, so the loop always restarts.

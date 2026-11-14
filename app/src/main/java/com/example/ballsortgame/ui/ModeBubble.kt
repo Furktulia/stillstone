@@ -57,9 +57,10 @@ internal fun DrawScope.drawTraitMark(trait: LevelTrait, center: Offset, size: Fl
     val stroke = Stroke(size * 0.13f)
     val r = size / 2
     when (trait) {
-        LevelTrait.MIXED -> { // A tall tube beside a short one.
-            drawLine(color, center + Offset(-r * .45f, -r * .85f), center + Offset(-r * .45f, r * .85f), size * .22f)
-            drawLine(color, center + Offset(r * .45f, -r * .05f), center + Offset(r * .45f, r * .85f), size * .22f)
+        LevelTrait.MIXED -> { // Rounded tall and short bars, with aligned bottoms.
+            val cap = androidx.compose.ui.graphics.StrokeCap.Round
+            drawLine(color, center + Offset(-r * .48f, -r * .77f), center + Offset(-r * .48f, r * .77f), size * .18f, cap)
+            drawLine(color, center + Offset(r * .48f, 0f), center + Offset(r * .48f, r * .77f), size * .18f, cap)
         }
         LevelTrait.SEALED -> { // A tube with a cork pressed into it.
             val tube = androidx.compose.ui.graphics.Path().apply {
@@ -71,17 +72,20 @@ internal fun DrawScope.drawTraitMark(trait: LevelTrait, center: Offset, size: Fl
             drawRoundRect(color, center + Offset(-r * .66f, -r * .98f), Size(r * 1.32f, r * .56f),
                 androidx.compose.ui.geometry.CornerRadius(r * .20f))
         }
-        LevelTrait.CONNECTED -> { // Two sides joined.
-            drawCircle(color, r * .32f, center + Offset(-r * .68f, 0f))
-            drawCircle(color, r * .32f, center + Offset(r * .68f, 0f))
-            drawLine(color, center + Offset(-r * .4f, 0f), center + Offset(r * .4f, 0f), size * .11f)
+        LevelTrait.CONNECTED -> { // Balanced stones joined by a fine connector.
+            val left = center + Offset(-r * .62f, 0f)
+            val right = center + Offset(r * .62f, 0f)
+            drawLine(color, left, right, size * .08f)
+            drawCircle(color, r * .38f, left)
+            drawCircle(color, r * .38f, right)
         }
-        LevelTrait.PATTERN -> { // A small column to rebuild: the same line drawing as the other marks.
-            drawRoundRect(color, center + Offset(-r * .50f, -r * 1.02f), Size(r, r * 2.04f),
-                androidx.compose.ui.geometry.CornerRadius(r * .5f), style = Stroke(size * 0.10f))
-            drawCircle(color, r * .21f, center + Offset(0f, -r * .58f))
-            drawCircle(color, r * .17f, center, style = Stroke(size * 0.085f))
-            drawCircle(color, r * .21f, center + Offset(0f, r * .58f))
+        LevelTrait.PATTERN -> { // Matching columns: an outlined reference beside solid stones.
+            val outline = Stroke(size * .08f)
+            for (y in listOf(-r * .51f, r * .51f)) {
+                // Equal outer diameters keep the hollow and filled columns balanced.
+                drawCircle(color, r * .32f, center + Offset(-r * .51f, y), style = outline)
+                drawCircle(color, r * .40f, center + Offset(r * .51f, y))
+            }
         }
         LevelTrait.CHALLENGE -> { // A peak.
             val peak = androidx.compose.ui.graphics.Path().apply {
