@@ -19,7 +19,7 @@ internal fun runRelaxedCampaign(options: Map<String, String>) {
     val seed = options.longNumber("seed", 120_000)
     val maxStates = options.number("analysis-states", 150_000)
     val trials = options.number("policy-trials", 100)
-    val shipped = BundledLevelPacks.playtest()
+    val shipped = BundledLevelPacks.playtestV3()
     val diversity = PuzzleDiversityIndex()
     shipped.levels.forEach { diversity.admit(it.board) }
     val worldOf = mapOf(3 to "three", 4 to "four", 5 to "five")

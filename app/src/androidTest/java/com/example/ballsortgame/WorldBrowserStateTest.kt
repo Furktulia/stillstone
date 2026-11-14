@@ -12,7 +12,7 @@ import org.junit.Test
 
 class WorldBrowserStateTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun infiniteAndResumeAreSeparateEntrancesInTheScrollableBrowser() {
+    @Test fun infiniteIsTheLastStretchAndResumeStaysWithinReach() {
         val levels = LevelCatalog.levels
         val state = GameUiState(loading = false, board = levels.first().initial)
         var infinite = 0
@@ -32,7 +32,6 @@ class WorldBrowserStateTest {
         compose.onNodeWithTag("browser_settings").assertIsDisplayed().assertIsEnabled()
         assertEquals(1, infinite)
         assertEquals(0, resumed)
-        compose.onNodeWithTag("world_list").performScrollToNode(hasTestTag("world_close"))
         compose.onNodeWithTag("world_close").assertIsDisplayed().performClick()
         assertEquals(1, resumed)
     }
@@ -53,8 +52,10 @@ class WorldBrowserStateTest {
         compose.onNodeWithText("Midnight").assertIsDisplayed()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("Midnight").assertIsDisplayed()
-        compose.onNodeWithTag("level_list").performScrollToNode(hasTestTag("level_31"))
-        compose.onNodeWithTag("level_31").performClick()
-        assertEquals(31, chosen)
+        // The world's last level sits at the end of its last mode section.
+        val last = levels.indexOfLast { it.worldId == "five" }
+        compose.onNodeWithTag("level_list").performScrollToNode(hasTestTag("level_$last"))
+        compose.onNodeWithTag("level_$last").performClick()
+        assertEquals(last, chosen)
     }
 }

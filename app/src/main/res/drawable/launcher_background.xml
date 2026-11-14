@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One continuous carved-stone composition fills every launcher mask. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/launcher_stone" android:gravity="fill" android:filter="true" />

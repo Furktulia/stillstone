@@ -189,11 +189,10 @@ class PlaytestUiTest {
         compose.onNodeWithTag("world_three").performClick()
         // Completion is now a visual check plus an accessible state, without a repeated caption.
         compose.onNodeWithTag("level_0")
-            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Sorted"))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Completed"))
         compose.onNodeWithTag("world_back").performClick()
         compose.onNodeWithTag("world_list").performScrollToNode(hasTestTag("world_five"))
         compose.onNodeWithTag("world_five").assertIsEnabled()
-        compose.onNodeWithTag("world_list").performScrollToNode(hasTestTag("world_close"))
         compose.onNodeWithTag("world_close").performClick()
         assertTrue(model.state.value.board.isSolved)
     }
@@ -206,11 +205,11 @@ class PlaytestUiTest {
         compose.onNodeWithTag("world_back").performClick()
         compose.onNodeWithTag("world_list").performScrollToNode(hasTestTag("world_three"))
         compose.onNodeWithTag("world_three").assertIsDisplayed()
-        compose.onNodeWithTag("world_list").performScrollToNode(hasTestTag("world_close"))
         compose.onNodeWithTag("world_close").performClick()
         assertEquals(initial, model.state.value.board)
     }
 
+    /** The last level of a world is now a mode level, so this also plays one through its own rules and hints. */
     @Test fun newFinalesAreReachableAndPlayableWithHintsAndUndo() {
         for (world in listOf("four", "five")) {
             val index = LevelCatalog.levels.indexOfLast { it.worldId == world }
@@ -224,9 +223,9 @@ class PlaytestUiTest {
                 compose.onNodeWithTag("tube_${move.destination}").performClick()
                 compose.waitForIdle()
             }
-            assertTrue(level.id, model.state.value.board.isSolved)
+            assertTrue(level.id, model.state.value.solved)
             compose.onNodeWithTag("undo").performClick()
-            assertFalse(model.state.value.board.isSolved)
+            assertFalse(model.state.value.solved)
             assertTrue(level.id in model.state.value.completed)
         }
     }

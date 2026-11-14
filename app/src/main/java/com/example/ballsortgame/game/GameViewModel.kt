@@ -41,7 +41,13 @@ data class GameUiState(
      * seen. Always tracked; whether it is shown is a display choice (see HiddenColors).
      */
     val unseen: List<Int> = emptyList(),
-)
+    /** The rules of the level being played, and which of its seals are open (bit i = seal i). */
+    val rules: LevelRules = LevelRules.CLASSIC,
+    val openSeals: Int = 0,
+) {
+    /** Finished under this level's own goal: sorted, or matching its target pattern. */
+    val solved: Boolean get() = rules.solved(board)
+}
 
 class GameViewModel(
     val levels: List<PlayableLevel>,
@@ -54,15 +60,23 @@ class GameViewModel(
     private var hintJob: Job? = null
     private var revision = 0L
     private var animations = emptyList<MovingGroup>()
-    private val knownSolutions = HashMap<Board, List<Move>>()
+    // Keyed by rules as well as position: the same stones can sit under different rules in two levels.
+    private data class Known(val rules: LevelRules, val position: RuledPosition)
+    private val knownSolutions = HashMap<Known, List<Move>>()
+    private fun known(position: RuledPosition = session.position) = Known(session.level.rules, position)
     // Smallest size each tube of the current puzzle has had while the player watched. Undo and
     // restart do not shrink it back: a colour that has been seen stays seen. Not saved; after
     // a restart of the app it is rebuilt from the saved moves, which is all that is known.
-    private var smallestSizes = HiddenColors.smallestSizes(session.level.initial, session.moves)
-    private fun forgetSeen() { smallestSizes = HiddenColors.smallestSizes(session.level.initial, session.moves) }
+    private var smallestSizes = seenSoFar()
+    private fun seenSoFar() = IntArray(session.board.tubes.size) { Int.MAX_VALUE }.also { sizes ->
+        session.positionHistory.forEach { HiddenColors.observe(sizes, it.board) }
+    }
+    private fun forgetSeen() { smallestSizes = seenSoFar() }
+    // Only for the level being played: doing every level at launch delayed the first frame.
+    private fun rememberAuthoredSolution() = session.level.let { cacheSolution(it.rules, it.rules.start(it.initial), it.solution) }
 
     init {
-        levels.forEach { cacheSolution(it.initial, it.solution) }
+        rememberAuthoredSolution()
         viewModelScope.launch {
             for (snapshot in saves) {
                 try {
@@ -82,6 +96,7 @@ class GameViewModel(
             }
             session = restored.first
             forgetSeen()
+            rememberAuthoredSolution()
             publish(message = restored.second ?: if (session.repairedSave) {
                 "An incompatible saved puzzle was reset. Your other progress was kept."
             } else "")
@@ -105,6 +120,7 @@ class GameViewModel(
             colorLabels = session.progress.colorLabels, reducedMotion = session.progress.reducedMotion,
             saveWarning = mutableState.value.saveWarning, revision = revision,
             unseen = HiddenColors.hiddenCounts(smallestSizes),
+            rules = session.level.rules, openSeals = session.position.open,
         )
     }
 
@@ -120,8 +136,16 @@ class GameViewModel(
 
     fun tapTube(index: Int) {
         val ui = state.value
-        if (ui.loading || session.board.isSolved) return
+        if (ui.loading || session.solved) return
         if (index !in session.board.tubes.indices) return
+        val rules = session.level.rules
+        if (rules.sealed(index, session.position.open)) {
+            invalidate()
+            val seal = rules.seals.first { it.tube == index }
+            publish(selected = ui.selected, message = if (seal.need == 1) "Sealed. Complete one tube to open it."
+                else "Sealed. Complete ${seal.need} tubes to open it.")
+            return
+        }
         invalidate()
         val selected = ui.selected
         if (selected == index) {
@@ -135,17 +159,21 @@ class GameViewModel(
         }
         val move = Move(selected, index)
         val before = session.board
-        val transfer = PuzzleRules.transfer(before, move)
-        if (transfer == null) {
+        val carried = session.carried(move)
+        if (carried == null) {
             publish(
                 selected = index.takeIf { before.tubes[it].balls.isNotEmpty() },
-                message = "Choose an empty tube or a matching top color with room.",
+                message = when {
+                    !rules.connected(selected, index) -> "The middle tube is in the way. Empty it to cross."
+                    rules.singleStone -> "That tube is full."
+                    else -> "Choose an empty tube or a matching top color with room."
+                },
             )
             return
         }
         check(session.move(move))
         HiddenColors.observe(smallestSizes, session.board)
-        if (!session.progress.reducedMotion) animations = animations + MovingGroup(revision, before, move, transfer.count)
+        if (!session.progress.reducedMotion) animations = animations + MovingGroup(revision, before, move, carried)
         publish()
         persist()
     }
@@ -188,6 +216,7 @@ class GameViewModel(
         animations = emptyList()
         session.chooseLevel(levels[index].id)
         forgetSeen()
+        rememberAuthoredSolution()
         publish()
         persist()
     }
@@ -219,10 +248,12 @@ class GameViewModel(
 
     fun hint() {
         // Hints read the committed board, so they never need to wait for stones to finish travelling.
-        if (state.value.loading || session.board.isSolved) return
+        if (state.value.loading || session.solved) return
         invalidate()
         val board = session.board
-        val cached = knownSolutions[board]
+        val position = session.position
+        val rules = session.level.rules
+        val cached = knownSolutions[known()]
         if (!cached.isNullOrEmpty()) {
             showHint(cached.first())
             return
@@ -230,6 +261,24 @@ class GameViewModel(
         val requestRevision = revision
         publish(thinking = true, message = "Looking for a useful move…")
         hintJob = viewModelScope.launch {
+            if (!rules.isClassic) {
+                // Levels with their own rules are small; search them exactly under those rules.
+                val result = withContext(Dispatchers.Default) {
+                    val context = currentCoroutineContext()
+                    RuledSolver.solve(rules, position, 120_000, cancelled = { !context.isActive })
+                }
+                if (revision != requestRevision || session.position != position) return@launch
+                when (result) {
+                    is RuledSolveResult.Solved -> {
+                        cacheSolution(rules, position, result.moves)
+                        result.moves.firstOrNull()?.let(::showHint) ?: publish()
+                    }
+                    RuledSolveResult.Unsolvable -> offerRecovery(proven = true)
+                    RuledSolveResult.TooLarge -> offerRecovery(proven = false)
+                    RuledSolveResult.Cancelled -> publish()
+                }
+                return@launch
+            }
             val result = withContext(Dispatchers.Default) {
                 val context = currentCoroutineContext()
                 PuzzleSolver().solve(
@@ -245,7 +294,7 @@ class GameViewModel(
             when (result) {
                 is SolveResult.Solved -> {
                     check(PuzzleRules.verifiesSolution(board, result.moves))
-                    cacheSolution(board, result.moves)
+                    cacheSolution(rules, position, result.moves)
                     result.moves.firstOrNull()?.let(::showHint) ?: publish()
                 }
                 is SolveResult.Unsolvable -> offerRecovery(proven = true)
@@ -258,13 +307,13 @@ class GameViewModel(
     private fun showHint(move: Move) {
         publish(
             selected = move.source, hint = move,
-            message = "Move the top group from tube ${move.source + 1} to tube ${move.destination + 1}.",
+            message = "Move the lifted stones to the glowing tube.",
         )
     }
 
     private fun offerRecovery(proven: Boolean) {
-        val history = session.boardHistory
-        val knownIndex = (history.lastIndex - 1 downTo 0).firstOrNull { knownSolutions.containsKey(history[it]) }
+        val history = session.positionHistory
+        val knownIndex = (history.lastIndex - 1 downTo 0).firstOrNull { knownSolutions.containsKey(known(history[it])) }
         val recovery = knownIndex?.let { Recovery(history.lastIndex - it, proven) }
         publish(
             message = if (proven) "This position cannot be solved. Undo can get you back."
@@ -273,13 +322,14 @@ class GameViewModel(
         )
     }
 
-    private fun cacheSolution(initial: Board, moves: List<Move>) {
-        var board = initial
+    private fun cacheSolution(rules: LevelRules, start: RuledPosition, moves: List<Move>) {
+        var position = start
         for (index in 0..moves.size) {
             val tail = moves.drop(index)
-            val previous = knownSolutions[board]
-            if (previous == null || tail.size < previous.size) knownSolutions[board] = tail
-            if (index < moves.size) board = requireNotNull(PuzzleRules.transfer(board, moves[index])).board
+            val key = Known(rules, position)
+            val previous = knownSolutions[key]
+            if (previous == null || tail.size < previous.size) knownSolutions[key] = tail
+            if (index < moves.size) position = requireNotNull(rules.transfer(position, moves[index])).first
         }
     }
 

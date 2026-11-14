@@ -14,7 +14,7 @@ internal fun runHiddenStudy(options: Map<String, String>) {
     val trials = options.number("policy-trials", 40)
     val maxStates = options.number("analysis-states", 60_000)
     println("id,tier_open,open_percent,hidden_percent,tier_hidden,moves,losing_states,states")
-    for (level in BundledLevelPacks.playtest().levels) {
+    for (level in BundledLevelPacks.playtestV3().levels) {
         val a = (PuzzleAnalyzer.analyze(level.board, maxStates, trials) as? AnalysisOutcome.Analyzed)?.analysis
         if (a == null) { println("${level.id},TOO_LARGE"); continue }
         val blind = requireNotNull(HiddenColors.bestBlindSuccesses(level.board, trials)) * 100 / trials

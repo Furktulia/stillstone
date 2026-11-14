@@ -29,6 +29,18 @@ import kotlin.math.*
 
 internal enum class NightSymbol { UNDO, RESTART, HINT }
 
+/**
+ * A stone gives under a finger: it sinks a little at once and springs back with a small
+ * overshoot when let go. Shared by every stone-like control so they all feel the same.
+ */
+@Composable
+internal fun Modifier.pressSink(pressed: Boolean, depth: Float = .945f): Modifier {
+    val scale by animateFloatAsState(if (pressed) depth else 1f,
+        if (pressed) androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 1400f)
+        else androidx.compose.animation.core.spring(dampingRatio = .38f, stiffness = 420f), label = "press")
+    return graphicsLayer { scaleX = scale; scaleY = scale }
+}
+
 /** Native labels over a shared, horizontally stretchable stone surface. */
 @Composable
 internal fun NightButton(label: String, modifier: Modifier = Modifier, enabled: Boolean = true,
@@ -37,7 +49,7 @@ internal fun NightButton(label: String, modifier: Modifier = Modifier, enabled: 
     val look = LocalWorldLook.current
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    Box(modifier.heightIn(min = if (large) 78.dp else 52.dp)
+    Box(modifier.heightIn(min = if (large) 78.dp else 52.dp).pressSink(pressed)
         .clickable(enabled = enabled, role = Role.Button, interactionSource = source, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center) {
         Canvas(Modifier.matchParentSize()) { stoneSurface(art, enabled, pressed, look) }
@@ -68,10 +80,11 @@ private fun DrawScope.stoneSurface(art: ImageBitmap?, enabled: Boolean, pressed:
     for (i in 0..2) {
         if (dx[i + 1] <= dx[i]) continue
         drawImage(art, srcOffset = IntOffset(sx[i], 0), srcSize = IntSize(sx[i + 1] - sx[i], art.height),
-            dstOffset = IntOffset(dx[i], if (pressed) 1.dp.toPx().roundToInt() else 0),
+            dstOffset = IntOffset(dx[i], 0),
             dstSize = IntSize(dx[i + 1] - dx[i], size.height.roundToInt()),
             alpha = if (enabled) 1f else .42f,
-            colorFilter = if (pressed) ColorFilter.tint(Color.White.copy(alpha = .10f), BlendMode.SrcAtop) else null)
+            // Pressed in, a stone falls into its own shadow; it does not light up.
+            colorFilter = if (pressed) ColorFilter.tint(Color.Black.copy(alpha = .16f), BlendMode.SrcAtop) else null)
     }
 }
 
@@ -216,3 +229,60 @@ private fun NightIcon(symbol: NightSymbol, modifier: Modifier, color: Color) {
     }
 }
 
+/** One line of a menu: quiet serif lettering on a full-width touch target, no surface of its own. */
+@Composable
+internal fun NightMenuRow(label: String, modifier: Modifier = Modifier, enabled: Boolean = true, detail: String? = null, onClick: () -> Unit) {
+    val look = LocalWorldLook.current
+    Column(modifier.fillMaxWidth().heightIn(min = 48.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+        .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.Center) {
+        Text(label, fontFamily = GameDisplayFont, style = MaterialTheme.typography.titleMedium,
+            color = look.light.copy(alpha = if (enabled) .9f else .32f))
+        if (detail != null) Text(detail, style = MaterialTheme.typography.bodySmall, color = lerp(look.light, look.tube, .45f))
+    }
+}
+
+/** One of a few choices, in the same quiet bubble the level traits use. */
+@Composable
+internal fun NightChip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val look = LocalWorldLook.current
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(50)
+    Box(modifier.heightIn(min = 40.dp).clip(shape)
+        .background(if (selected) look.accent.copy(alpha = .20f) else lerp(look.base, look.light, .06f))
+        .border(1.dp, look.accent.copy(alpha = if (selected) .75f else .22f), shape)
+        .clickable(role = Role.RadioButton, onClick = onClick)
+        .semantics { this.selected = selected }
+        .padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+        Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+            color = look.light.copy(alpha = if (selected) 1f else .72f))
+    }
+}
+
+/** A ring that fills when chosen, for a list where each choice has a description beside it. */
+@Composable
+internal fun NightRadio(selected: Boolean, modifier: Modifier = Modifier) {
+    val look = LocalWorldLook.current
+    Canvas(modifier.size(22.dp)) {
+        drawCircle(if (selected) look.accent else look.tube, size.minDimension / 2 - 1.dp.toPx(), style = Stroke(1.4.dp.toPx()))
+        if (selected) drawCircle(look.accent, size.minDimension * .24f)
+    }
+}
+
+@Composable
+internal fun NightSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier) {
+    val look = LocalWorldLook.current
+    Slider(value, onValueChange, modifier, colors = SliderDefaults.colors(
+        thumbColor = look.light, activeTrackColor = look.accent, inactiveTrackColor = look.tube.copy(alpha = .45f)))
+}
+
+@Composable
+internal fun NightTextField(value: String, onValueChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier) {
+    val look = LocalWorldLook.current
+    OutlinedTextField(value, onValueChange, modifier.fillMaxWidth(), label = { Text(hint) },
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = look.light, unfocusedTextColor = look.light, cursorColor = look.accent,
+            focusedBorderColor = look.accent.copy(alpha = .8f), unfocusedBorderColor = look.tube.copy(alpha = .7f),
+            focusedLabelColor = look.accent, unfocusedLabelColor = lerp(look.light, look.tube, .5f),
+            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent))
+}

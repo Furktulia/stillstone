@@ -29,8 +29,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import com.example.ballsortgame.game.GameUiState
 
-val PieceColors = listOf(Color(0xFFEB9791), Color(0xFF86CDB6), Color(0xFFE7C36D), Color(0xFF8CB7E8), Color(0xFFB7A0DE))
-val PieceNames = listOf("coral", "mint", "gold", "blue", "lilac")
+/**
+ * Stone colours, in the order levels number them. Every level must use only colours listed here:
+ * a missing one would silently repeat an earlier colour (PieceColorsTest checks every bundled pack).
+ * The sixth and later are chosen to stay apart from the first five: a deep rose that is neither coral
+ * nor lilac; a clear apricot, orange enough to stay apart from pink coral; a pale pearl.
+ */
+val PieceColors = listOf(Color(0xFFEB9791), Color(0xFF86CDB6), Color(0xFFE7C36D), Color(0xFF8CB7E8), Color(0xFFB7A0DE),
+    Color(0xFFD9799E), Color(0xFFF4A462), Color(0xFFE9E3D4))
+val PieceNames = listOf("coral", "mint", "gold", "blue", "lilac", "rose", "apricot", "pearl")
 
 private class GroupFlight {
     val progress = Animatable(0f)
@@ -47,8 +54,15 @@ private class GroupFlight {
 
 @Composable
 fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (Long) -> Unit, modifier: Modifier = Modifier, onImpact: (LandingImpact) -> Unit = {}, onContact: (StoneContact) -> Unit = {}, hideColors: Boolean = false) {
+    val rules = state.rules
+    val target = rules.target
+    val link = rules.bridge
     // With hidden colours, the stones the player has never seen are the bottom ones of a tube.
-    fun unseen(tube: Int) = if (hideColors) state.unseen.getOrElse(tube) { 0 } else 0
+    // A pattern cannot be restored blind, so nothing is hidden when a level has a target.
+    // Colours are hidden either because this level is a hidden-colours level or because the
+    // player switched it on for everything.
+    fun unseen(tube: Int) = if ((hideColors || rules.hidden) && rules.target == null) state.unseen.getOrElse(tube) { 0 } else 0
+    fun sealed(tube: Int) = rules.sealed(tube, state.openSeals)
     val density = LocalDensity.current.density
     val look = LocalWorldLook.current
     val groups = state.transfers
@@ -58,13 +72,30 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
     val frames = groups.mapIndexed { index, group -> GroupFrame(group, flights[index].phase) }
     val impactCallback by rememberUpdatedState(onImpact)
     val contactCallback by rememberUpdatedState(onContact)
-    val selectionLift by animateFloatAsState(if (state.selected != null) 1f else 0f,
-        tween(if (state.reducedMotion) 0 else 150), label = "selection")
+    // Driven by frames, not by a Compose tween: a phone with system animations removed (some
+    // power-saving modes do this) would otherwise snap the lift. The game's own Reduced
+    // motion setting is the only switch for its motion.
+    val selectionLift = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(state.selected != null, state.reducedMotion) {
+        val goal = if (state.selected != null) 1f else 0f
+        if (state.reducedMotion) { selectionLift.floatValue = goal; return@LaunchedEffect }
+        var last = withFrameNanos { it }
+        while (selectionLift.floatValue != goal) {
+            val now = withFrameNanos { it }
+            val step = (now - last) / 150_000_000f
+            last = now
+            selectionLift.floatValue = if (goal > selectionLift.floatValue) minOf(goal, selectionLift.floatValue + step) else maxOf(goal, selectionLift.floatValue - step)
+        }
+    }
     BoxWithConstraints(modifier) {
         val width = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val height = constraints.maxHeight.toFloat().coerceAtLeast(1f)
         val capacities = state.board.tubes.map { it.capacity }
-        val layout = remember(capacities, width, height, density) { boardGeometry(capacities, width, height, density) }
+        val layout = remember(capacities, width, height, density, link, target != null) {
+            if (link != null) connectedGeometry(capacities, link.left, link.shared, width, height, density)
+            else if (target != null) rowGeometry(capacities, width, height, density)
+            else boardGeometry(capacities, width, height, density)
+        }
         val routes = groups.map { group ->
             key(group.id) {
                 remember(group.id, layout) {
@@ -94,12 +125,15 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
             }
         }
         var settlingFrame by remember { mutableIntStateOf(0) }
-        var settlingRunning by remember(settling) { mutableStateOf(false) }
+        // Each landing asks the settling loop to run. A counter, not an on/off flag: when the loop
+        // finished and a group landed in the same frame, the flag went false then true again, the
+        // effect saw no change and never restarted, and the board froze mid-bounce for good.
+        var settleRequests by remember(settling) { mutableIntStateOf(0) }
         var settledEpoch by remember { mutableIntStateOf(0) }
         val stationary = stationaryPieces(frames, state.board)
         stationary.forEachIndexed { tube, stones -> settling.sync(tube, stones.size) }
-        LaunchedEffect(settling, settlingRunning) {
-            if (!settlingRunning) return@LaunchedEffect
+        LaunchedEffect(settling, settleRequests) {
+            if (settleRequests == 0) return@LaunchedEffect
             var last = withFrameNanos { it }
             while (settling.awake) {
                 val now = withFrameNanos { it }
@@ -125,7 +159,6 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                 settlingFrame++
                 if (settling.awakeCount != moving) settledEpoch++ // A tube came to rest: its group can retire.
             }
-            settlingRunning = false
             settledEpoch++
         }
         groups.forEachIndexed { index, group ->
@@ -220,7 +253,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                             }
                             val rebound = LandingMotion.reboundHeight(drops[index], slot, group.count)
                             settling.land(destination, group.count, height, SettlingColumns.impactSpeed(rebound, slot))
-                            settlingRunning = true
+                            settleRequests++
                             flight.landed = true
                             impactCallback(LandingImpact(group.count, drops[index] / slot))
                         } else flight.landed = true
@@ -242,6 +275,19 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
             stateDescription = "${frames.count { it.phase == FlightPhase.FLYING }} moving groups"
         }) {
             settlingFrame // Redraw while stones are settling.
+            if (link != null) {
+                // Two boards and the tube between them: a faint ground under each shore.
+                for (side in listOf(layout.indices.filter { it in link.left }, layout.indices.filter { it !in link.left && it != link.shared })) {
+                    if (side.isEmpty()) continue
+                    val pad = 14f * density
+                    val x0 = side.minOf { layout[it].centerX - layout[it].width / 2 } - pad
+                    val x1 = side.maxOf { layout[it].centerX + layout[it].width / 2 } + pad
+                    val y0 = side.minOf { layout[it].top } - pad
+                    val y1 = side.maxOf { layout[it].bottom } + pad + 14f * density
+                    drawRoundRect(look.light.copy(alpha = .035f), Offset(x0, y0), Size(x1 - x0, y1 - y0), CornerRadius(22f * density))
+                    drawRoundRect(look.light.copy(alpha = .07f), Offset(x0, y0), Size(x1 - x0, y1 - y0), CornerRadius(22f * density), style = Stroke(1f * density))
+                }
+            }
             state.board.tubes.forEachIndexed { index, tube ->
                 val geometry = layout[index]
                 val left = geometry.centerX - geometry.width / 2
@@ -250,6 +296,8 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                 val outline = when {
                     state.hint?.destination == index -> Color(0xFF9DD8BF)
                     state.selected == index -> look.accent
+                    target != null -> if (tube == target.tubes.getOrNull(index) && tube.balls.isNotEmpty() &&
+                        stationary[index] == tube.balls) Color(0xFF8CA99F) else look.tube
                     unseen(index) == 0 && stationary[index].size == tube.capacity && stationary[index].distinct().size == 1 -> Color(0xFF8CA99F)
                     else -> look.tube
                 }
@@ -267,19 +315,37 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                 stationary[index].forEachIndexed { pieceIndex, color ->
                     // Lifting an unseen stone with the selection would give its colour away.
                     val lifted = groups.isEmpty() && state.selected == index &&
-                        pieceIndex >= maxOf(tube.balls.size - tube.topRun, unseen(index))
+                        pieceIndex >= maxOf(tube.balls.size - (if (rules.singleStone) 1 else tube.topRun), unseen(index))
                     val bounce = settling.offset(index, pieceIndex)
                     drawStone(
-                        Offset(geometry.centerX, geometry.pieceY(pieceIndex, density) - bounce - if (lifted) 7f * density * selectionLift else 0f),
+                        Offset(geometry.centerX, geometry.pieceY(pieceIndex, density) - bounce - if (lifted) 7f * density * selectionLift.floatValue else 0f),
                         geometry.slot, color, state.colorLabels, numberPaint, look.light,
                         veil = if (pieceIndex < unseen(index)) lerp(look.base, look.tube, 0.55f) else null,
                     )
                 }
-                numberPaint.color = android.graphics.Color.rgb(168, 158, 184)
-                numberPaint.textSize = 12f * density
-                drawContext.canvas.nativeCanvas.drawText(
-                    (index + 1).toString(), geometry.centerX, geometry.bottom + 17f * density, numberPaint,
-                )
+                if (sealed(index)) {
+                    // Out of reach for now: the contents sit in shadow under a stone stopper.
+                    drawPath(path, look.base.copy(alpha = .46f))
+                    val lip = 5f * density
+                    val stopper = Path().apply {
+                        moveTo(left - lip, geometry.top + 2f * density)
+                        quadraticTo(left - lip, geometry.top - 9f * density, left + geometry.width * .22f, geometry.top - 10f * density)
+                        quadraticTo(geometry.centerX, geometry.top - 15f * density, right - geometry.width * .22f, geometry.top - 10f * density)
+                        quadraticTo(right + lip, geometry.top - 9f * density, right + lip, geometry.top + 2f * density)
+                        close()
+                    }
+                    drawPath(stopper, Brush.verticalGradient(listOf(lerp(look.tube, look.light, .35f), lerp(look.tube, look.base, .25f)),
+                        startY = geometry.top - 15f * density, endY = geometry.top + 2f * density))
+                    drawPath(stopper, look.light.copy(alpha = .28f), style = Stroke(1f * density))
+                }
+                // Tubes carry no numbers. A sealed tube alone says how far it is from opening.
+                if (sealed(index)) {
+                    val need = rules.seals.first { it.tube == index }.need
+                    val done = state.board.tubes.indices.count { !sealed(it) && state.board.tubes[it].isComplete }
+                    numberPaint.color = android.graphics.Color.rgb(168, 158, 184)
+                    numberPaint.textSize = 12f * density
+                    drawContext.canvas.nativeCanvas.drawText("${done.coerceAtMost(need)} / $need", geometry.centerX, geometry.bottom + 17f * density, numberPaint)
+                }
             }
             groups.forEachIndexed { index, group ->
                 if (frames[index].phase == FlightPhase.FLYING) {
@@ -306,7 +372,12 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                     .size(with(LocalDensity.current) { position.hitWidth.toDp() }, with(LocalDensity.current) { position.hitHeight.toDp() })
                     .testTag("tube_$index")
                     .semantics {
-                        contentDescription = "Tube ${index + 1}"
+                        contentDescription = when {
+                            sealed(index) -> "Sealed tube ${index + 1}, opens when ${rules.seals.first { it.tube == index }.need} tubes are complete"
+                            link?.shared == index -> "Shared tube"
+                            link != null -> (if (index in link.left) "Left" else "Right") + " tube ${index + 1}"
+                            else -> "Tube ${index + 1}"
+                        }
                         stateDescription = description + when {
                             state.hint?.destination == index -> " Hint destination."
                             state.selected == index -> " Selected."
@@ -314,7 +385,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                         }
                         selected = state.selected == index
                     }
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = !state.loading && !state.board.isSolved, role = Role.Button) { onTap(index) },
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = !state.loading && !state.solved, role = Role.Button) { onTap(index) },
             )
         }
     }

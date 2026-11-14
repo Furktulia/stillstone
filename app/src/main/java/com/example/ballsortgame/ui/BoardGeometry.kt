@@ -9,6 +9,54 @@ data class TubeGeometry(
     fun pieceY(index: Int, density: Float): Float = bottom - 6f * density - slot * (index + 0.5f)
 }
 
+/**
+ * Every tube in one row, in the same columns as the target arrangement shown above the
+ * board, so a stone's place in the pattern can be read straight down.
+ */
+fun rowGeometry(capacities: List<Int>, width: Float, height: Float, density: Float): List<TubeGeometry> {
+    require(capacities.isNotEmpty() && width > 0 && height > 0 && density > 0)
+    val padding = 12f * density
+    val cell = (width - padding * 2) / capacities.size
+    val tallest = capacities.max()
+    val slot = minOf(44f * density, (cell - 12f * density) / 1.6f, (height - 76f * density) / tallest).coerceAtLeast(1f)
+    // Sits in the upper part of its area, close under the target it is compared with.
+    val bottom = minOf(height - 30f * density, height * .30f + (tallest * slot + 12f * density) / 2 + slot)
+    return capacities.mapIndexed { index, capacity ->
+        val center = padding + (index + 0.5f) * cell
+        val top = bottom - capacity * slot - 12f * density
+        val hitTop = (top - 2.2f * slot).coerceAtLeast(0f)
+        TubeGeometry(center, top, bottom, slot * 1.36f, slot, center - cell / 2 + 1f * density, hitTop,
+            (cell - 2f * density).coerceAtLeast(1f), (bottom + 26f * density - hitTop).coerceAtMost(height - hitTop))
+    }
+}
+
+/**
+ * Two shores with the shared tube between them: the left shore's tubes in a column on the
+ * left, the others on the right, the shared tube in the middle. Same stone size throughout.
+ */
+fun connectedGeometry(capacities: List<Int>, left: Set<Int>, shared: Int, width: Float, height: Float, density: Float): List<TubeGeometry> {
+    require(shared in capacities.indices && left.all { it in capacities.indices })
+    val leftTubes = capacities.indices.filter { it in left }
+    val rightTubes = capacities.indices.filter { it !in left && it != shared }
+    val rows = maxOf(leftTubes.size, rightTubes.size, 1)
+    val tallest = capacities.max()
+    // Each tube needs a stone's height of clear air above it for stones to travel through, and room for its label below.
+    val slot = minOf(38f * density, width / 9f, (height / rows - 36f * density) / (tallest + 1.2f)).coerceAtLeast(1f)
+    val result = arrayOfNulls<TubeGeometry>(capacities.size)
+    fun place(tube: Int, x: Float, y: Float) {
+        val tubeHeight = capacities[tube] * slot + 12f * density
+        val center = width * x
+        val bottom = (height * y + (tubeHeight + slot * 1.2f) / 2 - 9f * density).coerceAtMost(height - 24f * density)
+        val hitTop = (bottom - tubeHeight - slot * .35f).coerceAtLeast(0f)
+        result[tube] = TubeGeometry(center, bottom - tubeHeight, bottom, slot * 1.36f, slot,
+            center - width * .13f, hitTop, width * .26f, (tubeHeight + slot * .85f).coerceAtMost(height - hitTop))
+    }
+    leftTubes.forEachIndexed { index, tube -> place(tube, .20f, (index + 0.5f) / leftTubes.size) }
+    rightTubes.forEachIndexed { index, tube -> place(tube, .80f, (index + 0.5f) / rightTubes.size) }
+    place(shared, .50f, .50f)
+    return result.map { requireNotNull(it) }
+}
+
 /** Fit a finite board into the available area; the last row is centered. All units are pixels. */
 fun boardGeometry(capacities: List<Int>, width: Float, height: Float, density: Float): List<TubeGeometry> {
     require(capacities.isNotEmpty() && capacities.all { it > 0 })
@@ -36,6 +84,8 @@ fun boardGeometry(capacities: List<Int>, width: Float, height: Float, density: F
     }
     val verticalPadding = verticalPadding(slot)
     val gap = gap(slot)
+    // Tubes rest at the bottom of their rows on purpose: on a tall phone the lower half of the
+    // screen is where a thumb reaches (creator, 2026-11-13). Do not centre the board.
     val cellHeight = ((height - verticalPadding * 2 - gap * (rows - 1)) / rows).coerceAtLeast(1f)
     return capacities.mapIndexed { index, capacity ->
         val row = index / columns

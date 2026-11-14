@@ -8,7 +8,8 @@ object LevelCatalog {
     val levels: List<PlayableLevel> = pack.worlds.flatMap { world ->
         pack.levels.filter { it.worldId == world.id }.map { level ->
             PlayableLevel(
-                level.id, world.title, level.board, level.solution, world.id, world.description,
+                level.id, world.title, level.board, level.solution, world.id, world.description, level.rules,
+                level.role == com.example.ballsortgame.engine.LevelRole.CHALLENGE,
             )
         }
     }

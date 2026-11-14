@@ -113,8 +113,9 @@ object SeededPuzzle {
                                     ?: throw IllegalArgumentException("Puzzle preparation was cancelled")
                                 analysis.tierFor(solved * 100 / H1_BLIND_TRIALS)
                             }
+                        // An H1 puzzle is a hidden-colours puzzle: it is shown that way wherever it is played.
                         if (tier in wanted) return PackLevel("endless-$version${recipe.lowercase()}-${seed.toString(36)}",
-                            "endless", role, seed, true, board, analysis.solution)
+                            "endless", role, seed, true, board, analysis.solution, LevelRules(hidden = hidden))
                     }
                 }
                 AnalysisOutcome.Cancelled -> throw IllegalArgumentException("Puzzle preparation was cancelled")
