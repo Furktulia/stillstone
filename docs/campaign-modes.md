@@ -186,3 +186,42 @@ Kept from that work:
 - **Settling freeze fix** (PuzzleBoard): a landing in the same frame the settling loop
   finished left stones frozen mid-bounce with no Next button. Landings now count up a
   request number instead of flipping a flag, so the loop always restarts.
+## Level classes and quality rules (2026-11-15): playtest-v8
+
+The creator found Dusk 41 (v7) opened with a finished tube and played itself: the shuffle
+generator only rejected boards that were entirely sorted, and the calm filter rewarded
+safety and length, so long levels made of forced moves passed. Agreed with the creator:
+
+- **Introductory**: the first levels of every world (Dusk: three tutorials and three
+  more, other worlds: the authored opener and four more) and, in Dusk only, the level that
+  introduces each mode. Nothing can be lost: every reachable position can still be finished.
+- **Relaxed**: dead ends are allowed, but shallow. From any losing position at most 3
+  Undos reach a position that can still be finished, and simple play wins at least 85%.
+  Plain levels that can never be lost now appear only as introductions. Exceptions:
+  hidden-colour levels must be impossible to lose (a wrong guess about a buried stone
+  should cost nothing), and a mode level that cannot be lost may still be relaxed (the
+  mode is the twist).
+- **Regular / challenge**: measured as in v7 (simple play fails 15-80% / over 80%).
+- **For every level** outside the three tap tutorials: no tube is finished at the start
+  under the level's own goal; at most one tube finishes in a single move from the start;
+  and at least **30% of the moves** on even the easiest shortest route are real choices
+  (positions where a legal move is slower or loses). Dusk 41 had 2 in 12.
+- One exception by the creator's choice: the Midnight trial board stays Midnight's last
+  challenge although it measures as no class (simple play wins 97%; its worst dead end
+  needs 4 Undos). `LevelQuality.KEPT_BY_CREATOR`.
+
+Code: `tools/LevelQuality.kt` (rules, `measureLevel`, `classify`, `campaign-audit`,
+`class-survey`), `tools/CampaignClasses.kt` (`campaign-classes`, builds v8 from v7, about
+14 minutes). Every v7 level is measured and kept under its ID if it passes and fits a class;
+the gaps are filled with new levels measured the same way, mode levels replaced by ones of
+the same mode, so each world keeps its length and each mode its count. Relaxed levels rise
+in real choices along each world. `CampaignAuditTest` fails if any shipped level breaks a
+rule or sits in a class its measurements do not give it.
+
+```
+.\gradlew.bat :puzzle-engine:run --args="campaign-audit --output build/puzzle-lab/audit.csv"
+.\gradlew.bat :puzzle-engine:run --args="campaign-classes --output build/puzzle-lab/my-classes"
+```
+
+Measurements are of the rules and simple strategies, not human ratings. Replaced levels
+lose their saved completion. Nothing in v8 has been playtested by a person.

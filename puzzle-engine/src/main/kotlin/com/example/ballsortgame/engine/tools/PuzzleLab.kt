@@ -33,6 +33,9 @@ fun main(args: Array<String>) {
                 tier-survey --count 200 --seed 70000 --analysis-states 20000 --policy-trials 40 --output build/puzzle-lab/tiers
                 tier-pool --count 6 --seed 80000 --attempts 4000 --output build/puzzle-lab/tier-pool
                 seed-benchmark --count 100 --seed 1
+                campaign-audit --input pack.txt --output build/puzzle-lab/audit.csv   (default: the bundled campaign)
+                class-survey --attempts 600 --seed 300000
+                campaign-classes --seed 400000 --attempts 3000 --classic-attempts 1500 --output build/puzzle-lab/classes
                 Options are name/value pairs. Generation emits JSON; --output writes one file per puzzle.
                 Strategies: shuffle (solve before accepting) or reverse (construction certificate).
                 Benchmark compares both candidate methods with exact and weighted search.
@@ -40,7 +43,7 @@ fun main(args: Array<String>) {
             """.trimIndent())
             return
         }
-        require(command in setOf("generate", "benchmark", "corpus", "survey", "workshop", "pack", "verify-pack", "difficulty-study", "review-challenges", "refine-finales", "replay-seed", "tier-survey", "tier-pool", "seed-benchmark", "hidden-study", "relaxed-campaign", "mode-campaign", "classic-expansion", "campaign-rebuild")) { "Unknown command: $command" }
+        require(command in setOf("generate", "benchmark", "corpus", "survey", "workshop", "pack", "verify-pack", "difficulty-study", "review-challenges", "refine-finales", "replay-seed", "tier-survey", "tier-pool", "seed-benchmark", "hidden-study", "relaxed-campaign", "mode-campaign", "classic-expansion", "campaign-rebuild", "campaign-audit", "class-survey", "campaign-classes")) { "Unknown command: $command" }
         val options = parseOptions(args.drop(1))
         when (command) {
             "replay-seed" -> {
@@ -72,6 +75,9 @@ fun main(args: Array<String>) {
             "mode-campaign" -> runModeCampaign(options)
             "classic-expansion" -> runClassicExpansion(options)
             "campaign-rebuild" -> runCampaignRebuild(options)
+            "campaign-audit" -> runCampaignAudit(options)
+            "class-survey" -> runClassSurvey(options)
+            "campaign-classes" -> runCampaignClasses(options)
         }
     } catch (error: IllegalArgumentException) {
         System.err.println("Puzzle Lab: ${error.message}")

@@ -127,7 +127,7 @@ Stone labels auto-fit on one line. This new choice still needs creator phone rev
 | Entry/navigation | app/.../MainActivity.kt and ui/GameHub.kt; saveable browser state, mode preference, lifecycle activation |
 | Logical game | game/GameSession.kt, GameViewModel.kt, ProgressCodec.kt, GameSaveStore.kt |
 | Rules/search/generation | puzzle-engine/.../Puzzle.kt, PuzzleSolver.kt, PuzzleGenerator.kt, SeededPuzzle.kt |
-| Active campaign | LevelCatalog → BundledLevelPacks.playtest → puzzle-engine/src/main/resources/levels/playtest-v2.txt |
+| Active campaign | LevelCatalog → BundledLevelPacks.playtest → puzzle-engine/src/main/resources/levels/playtest-v8.txt (classes and quality rules: docs/campaign-modes.md) |
 | Desktop authoring | engine/tools/PuzzleLab.kt, LevelWorkshop.kt, ChallengeAssessment.kt, DifficultyStudy.kt, FinaleRefiner.kt |
 | Board/presentation | ui/PuzzleBoard.kt, GroupPresentation.kt, GroupRoute.kt, TransferMotion.kt, LandingMotion.kt, BoardGeometry.kt |
 | World UI | ui/WorldPicker.kt, WorldArt.kt, ArtworkLayout.kt, NightUi.kt |
