@@ -13,7 +13,7 @@ class LevelPackTest {
     private val limits = SearchOptions(SearchLimits(150_000, 150_000, 150_000, 5_000))
 
     /**
-     * The campaign as rebuilt after play (2026-11-14). These are the things the creator asked for,
+     * The campaign as rebuilt after play (2026-11-14) and sorted into classes (2026-11-15). These are the things the creator asked for,
      * stated as rules the pack must keep.
      */
     @Test fun currentCampaignIsPacedIntroducesModesAloneAndItsModeLevelsMeanSomething() {
@@ -40,7 +40,7 @@ class LevelPackTest {
             val firsts = listOf("MIXED", "HIDDEN", "SEALED", "CONNECTED", "PATTERN").map { trait ->
                 val at = run.indexOfFirst { trait in traits(it) }
                 assertEquals("${world.id} $trait is first met combined with something else", setOf(trait), traits(run[at]))
-                assertEquals("${world.id} $trait", LevelRole.RELAXED, run[at].role)
+                assertTrue("${world.id} $trait", run[at].role == LevelRole.INTRODUCTION || run[at].role == LevelRole.RELAXED)
                 at
             }
             assertEquals(world.id, firsts.sorted(), firsts)
@@ -203,7 +203,7 @@ class LevelPackTest {
             }
         }
         // Each section starts gently: its first level is never one of its hard ones.
-        for (group in levels.groupBy { it.worldId to it.mode }.values) assertEquals(LevelRole.RELAXED, group.first().role)
+        for (group in levels.groupBy { it.worldId to it.mode }.values) assertTrue(group.first().id, group.first().role == LevelRole.INTRODUCTION || group.first().role == LevelRole.RELAXED)
     }
 
     @Test fun bundledCollectionIsStructurallyDistinct() {

@@ -127,7 +127,7 @@ Stone labels auto-fit on one line. This new choice still needs creator phone rev
 | Entry/navigation | app/.../MainActivity.kt and ui/GameHub.kt; saveable browser state, mode preference, lifecycle activation |
 | Logical game | game/GameSession.kt, GameViewModel.kt, ProgressCodec.kt, GameSaveStore.kt |
 | Rules/search/generation | puzzle-engine/.../Puzzle.kt, PuzzleSolver.kt, PuzzleGenerator.kt, SeededPuzzle.kt |
-| Active campaign | LevelCatalog → BundledLevelPacks.playtest → puzzle-engine/src/main/resources/levels/playtest-v2.txt |
+| Active campaign | LevelCatalog → BundledLevelPacks.playtest → puzzle-engine/src/main/resources/levels/playtest-v8.txt (classes and quality rules: docs/campaign-modes.md) |
 | Desktop authoring | engine/tools/PuzzleLab.kt, LevelWorkshop.kt, ChallengeAssessment.kt, DifficultyStudy.kt, FinaleRefiner.kt |
 | Board/presentation | ui/PuzzleBoard.kt, GroupPresentation.kt, GroupRoute.kt, TransferMotion.kt, LandingMotion.kt, BoardGeometry.kt |
 | World UI | ui/WorldPicker.kt, WorldArt.kt, ArtworkLayout.kt, NightUi.kt |
@@ -296,7 +296,8 @@ Generated artwork is an asset, never the source of native buttons/text.
 Windows Android Studio project, originally:
 C:/Users/furtu/AndroidStudioProjects/Ballsortgame.
 Primary testing: Android Emulator; meaningful milestones: Samsung Galaxy S25+.
-Portrait first; landscape polish/testing intentionally deferred.
+Portrait first. Phones are locked to portrait; large screens (unfolded foldables, sw >= 600 dp)
+rotate and reflow; see "Phones portrait, large screens reflow" in world-ui.md (2026-11-15).
 
 Latest UI follow-up actually ran:
 - debug assemble and all 30 app JVM tests passed;

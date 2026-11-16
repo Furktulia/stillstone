@@ -57,31 +57,52 @@ fun connectedGeometry(capacities: List<Int>, left: Set<Int>, shared: Int, width:
     return result.map { requireNotNull(it) }
 }
 
-/** Fit a finite board into the available area; the last row is centered. All units are pixels. */
-fun boardGeometry(capacities: List<Int>, width: Float, height: Float, density: Float): List<TubeGeometry> {
+/**
+ * Fit a finite board into the available area; the last row is centered. All units are pixels.
+ *
+ * On a [large] screen (unfolded foldable, tablet) the number of columns is whichever lets the
+ * stones grow largest, and they may grow a little past the phone size. Phones (large = false)
+ * keep the original choice: three columns, or up to six on a very wide area.
+ */
+fun boardGeometry(capacities: List<Int>, width: Float, height: Float, density: Float, large: Boolean = false): List<TubeGeometry> {
     require(capacities.isNotEmpty() && capacities.all { it > 0 })
     require(width > 0 && height > 0 && density > 0)
     val horizontalPadding = 12f * density
-    val desired = if (width > height * 1.45f) minOf(6, capacities.size) else minOf(3, capacities.size)
-    val columns = minOf(desired, floor((width - horizontalPadding * 2) / (56f * density)).toInt().coerceAtLeast(1))
-    val rows = (capacities.size + columns - 1) / columns
-    val cellWidth = (width - horizontalPadding * 2).coerceAtLeast(1f) / columns
+    val fitting = floor((width - horizontalPadding * 2) / (56f * density)).toInt().coerceAtLeast(1)
+    val largest = if (large) 52f * density else 44f * density
     // The space above the board and between rows is travel room for stones, so it only
     // needs to scale with them. Full-size boards keep the original 52/40 dp; on a short
     // board the stones would otherwise shrink to pay for corridors far wider than they are.
     fun verticalPadding(slot: Float) = (slot * 1.6f).coerceAtMost(52f * density)
     fun gap(slot: Float) = (slot * 1.25f).coerceIn(8f * density, 40f * density)
-    fun needed(slot: Float) = verticalPadding(slot) * 2 + gap(slot) * (rows - 1) +
-        rows * (capacities.max() * slot + 28f * density)
-    var slot = minOf(44f * density, (cellWidth - 16f * density) / 2.5f).coerceAtLeast(1f)
-    if (needed(slot) > height) {
-        var low = 1f
-        repeat(24) {
-            val middle = (low + slot) / 2
-            if (needed(middle) > height) slot = middle else low = middle
+    fun slotFor(columns: Int): Float {
+        val rows = (capacities.size + columns - 1) / columns
+        val cellWidth = (width - horizontalPadding * 2).coerceAtLeast(1f) / columns
+        fun needed(slot: Float) = verticalPadding(slot) * 2 + gap(slot) * (rows - 1) +
+            rows * (capacities.max() * slot + 28f * density)
+        var slot = minOf(largest, (cellWidth - 16f * density) / 2.5f).coerceAtLeast(1f)
+        if (needed(slot) > height) {
+            var low = 1f
+            repeat(24) {
+                val middle = (low + slot) / 2
+                if (needed(middle) > height) slot = middle else low = middle
+            }
+            slot = low
         }
-        slot = low
+        return slot
     }
+    val columns = if (large) {
+        // Fewest columns among those that give (nearly) the biggest stones: fewer, fuller rows read calmer.
+        val options = (minOf(3, capacities.size, fitting)..minOf(6, capacities.size, fitting)).associateWith(::slotFor)
+        val best = options.values.max()
+        options.entries.first { it.value >= best * .97f }.key
+    } else {
+        val desired = if (width > height * 1.45f) minOf(6, capacities.size) else minOf(3, capacities.size)
+        minOf(desired, fitting)
+    }
+    val rows = (capacities.size + columns - 1) / columns
+    val cellWidth = (width - horizontalPadding * 2).coerceAtLeast(1f) / columns
+    val slot = slotFor(columns)
     val verticalPadding = verticalPadding(slot)
     val gap = gap(slot)
     // Tubes rest at the bottom of their rows on purpose: on a tall phone the lower half of the

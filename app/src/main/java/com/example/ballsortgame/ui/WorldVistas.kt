@@ -64,7 +64,7 @@ internal fun vistaOf(world: String): Vista = when (world) {
  */
 @Composable
 internal fun WorldVistaSection(world: String, name: String, detail: String, height: Dp, next: String?,
-    modifier: Modifier = Modifier, open: () -> Unit) {
+    modifier: Modifier = Modifier, wide: Boolean = false, open: () -> Unit) {
     val vista = remember(world) { vistaOf(world) }
     val below = remember(next) { next?.let(::vistaOf) }
     val look = worldLook(world)
@@ -92,10 +92,13 @@ internal fun WorldVistaSection(world: String, name: String, detail: String, heig
                 // Only the landscape along the bottom of the wide painting is used, in the lower half
                 // of the stretch; the open sky above it is what lets one world run into the next.
                 // Same scale in both directions; only a window of the painting's width is shown.
-                val land = art.height / 2
-                val scale = maxOf(size.height * .5f / land, size.width / art.width)
+                val strip = art.height / 2
+                val scale = maxOf(size.height * .5f / strip, size.width / art.width)
                 val shownWidth = (size.width / scale).roundToInt().coerceAtMost(art.width)
                 val left = ((art.width - shownWidth) * vista.anchor).roundToInt()
+                // On a wide screen the painting is scaled by width and its strip would climb past the
+                // name, so only its lower part is shown there: at most 58% of the stretch.
+                val land = if (wide) strip.coerceAtMost((size.height * .58f / scale).roundToInt()) else strip
                 if (vista.moonAt >= 0f) {
                     val moon = Offset((vista.moonAt * art.width - left) * scale, size.height * .15f)
                     val pale = Color(0xFFECE8DA)

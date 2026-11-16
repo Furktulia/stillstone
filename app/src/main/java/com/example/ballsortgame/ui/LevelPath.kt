@@ -35,7 +35,8 @@ import com.example.ballsortgame.game.GameUiState
 import com.example.ballsortgame.game.PlayableLevel
 import com.example.ballsortgame.ui.theme.GameDisplayFont
 
-private val Columns = floatArrayOf(.21f, .50f, .79f)
+/** Across the track: three stones per row on phones, more on a wide screen, always centred. */
+private fun columnX(column: Int, per: Int): Float = if (per == 3) floatArrayOf(.21f, .50f, .79f)[column] else .5f + (column - (per - 1) / 2f) * (.78f / (per - 1))
 
 /**
  * How a finished level looks. Three candidates under review (2026-11-14); none has a tick.
@@ -50,11 +51,11 @@ private val LanternLight = Color(0xFFFFC27A)
 private val LanternInk = Color(0xFFFFE6BE)
 
 /** Where the [place]-th stone of [row] stands: rows run left to right, then back, like a path winding downhill. */
-private fun columnOf(row: Int, place: Int) = if (row % 2 == 0) place else 2 - place
+private fun columnOf(row: Int, place: Int, per: Int) = if (row % 2 == 0) place else per - 1 - place
 
 /** The path dips and rises a little so it never reads as a grid. */
-private fun liftOf(row: Int, column: Int, rowHeight: Float): Float =
-    rowHeight * (if (column == 1) (if (row % 2 == 0) -.10f else .10f) else 0f) +
+private fun liftOf(row: Int, column: Int, rowHeight: Float, per: Int = 3): Float =
+    rowHeight * (if (column % 2 == 1 && column < per - 1) (if (row % 2 == 0) -.10f else .10f) else 0f) +
         rowHeight * .035f * (((row * 7 + column * 3) % 5) - 2) / 2f
 
 /** The light that drifts over each world's path: fireflies at dusk, pale motes by the lake, stars at midnight. */
@@ -71,14 +72,14 @@ private fun moteColor(world: String) = when (world) {
  */
 @Composable
 internal fun LevelPath(world: String, name: String, entries: List<IndexedValue<PlayableLevel>>, state: GameUiState,
-    listState: LazyListState, safe: PaddingValues, pageWidth: Dp, compact: Boolean, choose: (Int) -> Unit) {
+    listState: LazyListState, safe: PaddingValues, pageWidth: Dp, compact: Boolean, choose: (Int) -> Unit, perRow: Int = 3) {
     val look = worldLook(world)
-    val rows = remember(entries) { entries.chunked(3) }
+    val rows = remember(entries, perRow) { entries.chunked(perRow) }
     val rowHeight = if (compact) 94.dp else 112.dp
-    val trackWidth = pageWidth.coerceAtMost(440.dp)
+    val trackWidth = pageWidth.coerceAtMost(if (perRow == 3) 440.dp else 150.dp * perRow)
     val trackLeft = (pageWidth - trackWidth) / 2
     val done = state.completed
-    val playingRow = remember(entries, state.levelIndex) { rows.indexOfFirst { row -> row.any { it.index == state.levelIndex } } }
+    val playingRow = remember(rows, state.levelIndex) { rows.indexOfFirst { row -> row.any { it.index == state.levelIndex } } }
     // Open where the player is, with a little of the path behind them still in view.
     LaunchedEffect(world) {
         if (playingRow >= 4 && listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0)
@@ -116,8 +117,8 @@ internal fun LevelPath(world: String, name: String, entries: List<IndexedValue<P
             Box(Modifier.fillMaxWidth().height(rowHeight).drawBehind {
                 val left = trackLeft.toPx(); val wide = trackWidth.toPx(); val h = size.height
                 fun at(place: Int): Offset {
-                    val column = columnOf(r, place)
-                    return Offset(left + wide * Columns[column], h / 2 + liftOf(r, column, h))
+                    val column = columnOf(r, place, perRow)
+                    return Offset(left + wide * columnX(column, perRow), h / 2 + liftOf(r, column, h, perRow))
                 }
                 if (finishedLook == FinishedLook.LANTERN) {
                     // Lantern light on the ground. Each row also draws the light of the rows next to it,
@@ -126,8 +127,8 @@ internal fun LevelPath(world: String, name: String, entries: List<IndexedValue<P
                     val reach = 98.dp.toPx()
                     val lights = (r - 1..r + 1).flatMap { other ->
                         rows.getOrNull(other).orEmpty().mapIndexedNotNull { place, entry ->
-                            val column = columnOf(other, place)
-                            if (entry.value.id in done) Offset(left + wide * Columns[column], (other - r) * h + h / 2 + liftOf(other, column, h)) else null
+                            val column = columnOf(other, place, perRow)
+                            if (entry.value.id in done) Offset(left + wide * columnX(column, perRow), (other - r) * h + h / 2 + liftOf(other, column, h, perRow)) else null
                         }
                     }
                     // The first and last rows have no neighbour to carry their light on, so they may spill past their own edge.
@@ -190,12 +191,12 @@ internal fun LevelPath(world: String, name: String, entries: List<IndexedValue<P
             }) {
                 for (place in row.indices) {
                     val entry = row[place]
-                    val column = columnOf(r, place)
-                    val local = r * 3 + place + 1
+                    val column = columnOf(r, place, perRow)
+                    val local = r * perRow + place + 1
                     val hit = 92.dp
                     PathStone(local, world, entry.index == state.levelIndex, entry.value.id in done, compact,
-                        Modifier.offset(x = trackLeft + trackWidth * Columns[column] - hit / 2,
-                            y = with(androidx.compose.ui.platform.LocalDensity.current) { liftOf(r, column, rowHeight.toPx()).toDp() })
+                        Modifier.offset(x = trackLeft + trackWidth * columnX(column, perRow) - hit / 2,
+                            y = with(androidx.compose.ui.platform.LocalDensity.current) { liftOf(r, column, rowHeight.toPx(), perRow).toDp() })
                             .size(hit, rowHeight).testTag("level_${entry.index}"),
                         traitsOf(entry.value).filter { it != LevelTrait.CHALLENGE }, entry.value.challenge) { choose(entry.index) }
                 }

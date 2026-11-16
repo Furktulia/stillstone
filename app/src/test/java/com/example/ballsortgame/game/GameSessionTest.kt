@@ -122,7 +122,8 @@ class GameSessionTest {
             PlayableLevel(it.id, it.worldId, it.board, it.solution)
         }
         val previous = GameSession(old)
-        val moonlightTen = old.filter { it.worldId == "four" }.last()
+        // The last of the original Moonlight levels still in the campaign (v8 retired its finale: 4 real choices in 15 moves).
+        val moonlightTen = old.filter { it.worldId == "four" && levels.any { level -> level.id == it.id } }.last()
         previous.chooseLevel(moonlightTen.id)
         moonlightTen.solution.forEach { assertTrue(previous.move(it)) }
         val midnightTen = old.filter { it.worldId == "five" }.last()
