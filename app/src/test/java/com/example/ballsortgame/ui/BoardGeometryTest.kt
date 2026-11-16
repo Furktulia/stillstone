@@ -36,6 +36,20 @@ class BoardGeometryTest {
         assertTrue(compact[5].bottom + 21f <= 330f) // Tube number still fits below the last row.
     }
 
+    @Test fun largeScreensUseMoreColumnsForBiggerStonesAndStayInside() {
+        // Board area of an unfolded foldable held sideways (beside the control rail), in dp at density 1.
+        val capacities = listOf(4, 4, 4, 4, 4, 4, 4)
+        val phone = boardGeometry(capacities, 526f, 640f, 1f)
+        val large = boardGeometry(capacities, 526f, 640f, 1f, large = true)
+        assertTrue(large[0].slot > phone[0].slot)
+        assertTrue(large.map { it.bottom }.distinct().size < phone.map { it.bottom }.distinct().size)
+        for (tube in large) {
+            assertTrue(tube.hitLeft >= 0 && tube.hitLeft + tube.hitWidth <= 526f)
+            assertTrue(tube.top >= 0 && tube.bottom <= 640f)
+            assertTrue(tube.slot <= 52f)
+        }
+    }
+
     @Test fun incompleteLastRowIsCentered() {
         val layout = boardGeometry(List(5) { 3 }, 400f, 500f, 1f)
         assertEquals(400f, layout[3].centerX + layout[4].centerX, 0.01f)

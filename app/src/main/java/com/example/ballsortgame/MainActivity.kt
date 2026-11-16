@@ -11,11 +11,14 @@ import com.example.ballsortgame.game.AtomicGameSaveStore
 import com.example.ballsortgame.game.GameViewModel
 import com.example.ballsortgame.game.LevelCatalog
 import com.example.ballsortgame.ui.GameHub
+import com.example.ballsortgame.ui.applyOrientationPolicy
 import com.example.ballsortgame.ui.theme.BallSortGameTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Folding or unfolding recreates the activity, so this is decided again for each screen.
+        applyOrientationPolicy()
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),

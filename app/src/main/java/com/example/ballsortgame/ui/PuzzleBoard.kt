@@ -91,10 +91,11 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
         val width = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val height = constraints.maxHeight.toFloat().coerceAtLeast(1f)
         val capacities = state.board.tubes.map { it.capacity }
-        val layout = remember(capacities, width, height, density, link, target != null) {
+        val large = isLargeScreen()
+        val layout = remember(capacities, width, height, density, link, target != null, large) {
             if (link != null) connectedGeometry(capacities, link.left, link.shared, width, height, density)
             else if (target != null) rowGeometry(capacities, width, height, density)
-            else boardGeometry(capacities, width, height, density)
+            else boardGeometry(capacities, width, height, density, large)
         }
         val routes = groups.map { group ->
             key(group.id) {

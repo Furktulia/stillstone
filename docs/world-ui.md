@@ -105,6 +105,26 @@ Current outstanding work is tracked in [next-steps.md](next-steps.md), including
 the phone reports of overhead-tube rebound clipping and interrupted settling.
 Those physics behaviors were not changed in this UI follow-up.
 
+## Phones portrait, large screens reflow (2026-11-15)
+
+The creator chose this from the mocks of branch foldable-layout. Before/after emulator captures
+are in docs/mocks/landscape-before and landscape-after.
+
+- `ScreenSize.kt`: a screen is large when its shortest side is at least 600 dp. MainActivity
+  locks phones to portrait at runtime and lets large screens follow the sensor. It is not a
+  manifest lock because Android 16+ ignores locks on large screens for targetSdk 36+.
+- Every change is gated on large screens, so portrait phones are untouched. Verified on the
+  emulator: play, level list and world screen are pixel-identical before and after.
+- Board: `boardGeometry(large = true)` picks the column count (3 to 6) that gives the biggest
+  stones, preferring fewer columns, and lets stones grow to 52 dp instead of 44.
+- Level path: on a large screen held sideways the trail runs five stones per row (LevelPath
+  `perRow`); three per row is unchanged.
+- World journey: on a large screen held sideways each stretch is 40% of the height (at least
+  260 dp) and the painting strip is capped at 58% of the stretch so the name stays clear.
+  No new art: the existing 20:9 wide paintings already cover wide screens.
+- Settings already caps at 420 dp; unchanged.
+- Not tested on a real foldable; checked on the emulator resized to 1856x2160 at density 420.
+
 ## Current scope
 
 Portrait appearance is the priority. Landscape polish and further landscape testing

@@ -51,6 +51,9 @@ fun WorldPicker(levels: List<PlayableLevel>, state: GameUiState, onDismiss: () -
                 val pageHeight = maxHeight
                 val pageWidth = maxWidth
                 val compact = pageHeight < 740.dp
+                // An unfolded foldable held sideways: the journey shows wider, shorter stretches and the
+                // level path runs five stones wide. Phones (never large) keep their portrait layout.
+                val wideLarge = isLargeScreen() && pageWidth > pageHeight
                 if (entries != null) WorldBackdrop(id, selection = true, modifier = Modifier.matchParentSize())
                 val safe = WindowInsets.safeDrawing.asPaddingValues()
                 Column(Modifier.fillMaxSize()) {
@@ -59,24 +62,25 @@ fun WorldPicker(levels: List<PlayableLevel>, state: GameUiState, onDismiss: () -
                         // landscape, and the mist under one is the sky of the next. A little
                         // over two fit on a screen, so the third shows there is more below.
                         val all = worlds.entries.toList()
-                        val stretch = (pageHeight * .46f).coerceAtLeast(300.dp)
+                        val stretch = if (wideLarge) (pageHeight * .40f).coerceAtLeast(260.dp) else (pageHeight * .46f).coerceAtLeast(300.dp)
                         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("world_list"), state = listState) {
                             all.forEachIndexed { index, entry ->
                                 item(key = entry.key) {
                                     WorldVistaSection(entry.key, entry.value.first().value.collection,
                                         "${entry.value.count { it.value.id in state.completed }} of ${entry.value.size}",
-                                        stretch, all.getOrNull(index + 1)?.key ?: if (onInfinite != null) "endless" else null) { selectedWorld = entry.key }
+                                        stretch, all.getOrNull(index + 1)?.key ?: if (onInfinite != null) "endless" else null, wide = wideLarge) { selectedWorld = entry.key }
                                 }
                             }
                             if (onInfinite != null) item(key = "endless") {
-                                WorldVistaSection("endless", "Infinite", "Endless puzzles", stretch + safe.calculateBottomPadding(), null, open = onInfinite)
+                                WorldVistaSection("endless", "Infinite", "Endless puzzles", stretch + safe.calculateBottomPadding(), null, wide = wideLarge, open = onInfinite)
                             }
                         }
                     } else {
                         val world = entries.first().value
                         // The levels wind down through the world's painting as stones on one path.
                         Box(Modifier.weight(1f).fillMaxWidth()) {
-                            LevelPath(id, world.collection, entries, state, listStates.getValue(id), safe, pageWidth, compact, choose)
+                            LevelPath(id, world.collection, entries, state, listStates.getValue(id), safe, pageWidth, compact, choose,
+                                perRow = if (wideLarge) 5 else 3)
                         }
                     }
                 }

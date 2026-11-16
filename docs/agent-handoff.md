@@ -296,7 +296,8 @@ Generated artwork is an asset, never the source of native buttons/text.
 Windows Android Studio project, originally:
 C:/Users/furtu/AndroidStudioProjects/Ballsortgame.
 Primary testing: Android Emulator; meaningful milestones: Samsung Galaxy S25+.
-Portrait first; landscape polish/testing intentionally deferred.
+Portrait first. Phones are locked to portrait; large screens (unfolded foldables, sw >= 600 dp)
+rotate and reflow; see "Phones portrait, large screens reflow" in world-ui.md (2026-11-15).
 
 Latest UI follow-up actually ran:
 - debug assemble and all 30 app JVM tests passed;
