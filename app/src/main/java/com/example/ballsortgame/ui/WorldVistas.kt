@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -74,7 +76,8 @@ internal fun WorldVistaSection(world: String, name: String, detail: String, heig
     Box(modifier.fillMaxWidth().height(height).testTag("world_$world")
         .semantics(mergeDescendants = true) { contentDescription = "$name. $detail"; role = Role.Button }
         .clickable(interactionSource = source, indication = null, onClick = open)) {
-        Canvas(Modifier.matchParentSize()) {
+        // A still painting: drawn once into its own layer, so scrolling the journey only moves it.
+        Canvas(Modifier.matchParentSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
             drawRect(Brush.verticalGradient(listOf(vista.skyTop, vista.skyLow)))
             // The light of this place: low on the horizon at dusk, high and cool at night.
             val glowAt = Offset(size.width * .5f, size.height * if (world == "three") .74f else .30f)
@@ -156,7 +159,8 @@ internal fun WorldVistaSection(world: String, name: String, detail: String, heig
 internal fun PlayBackdrop(world: String, modifier: Modifier = Modifier) {
     val vista = remember(world) { vistaOf(world) }
     val art = vista.art?.let { rememberArtwork(it) }
-    Canvas(modifier) {
+    // Drawn once into its own layer: moving stones above it must not repaint the painting every frame.
+    Canvas(modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
         val night = Color(0xFF07060F)
         drawRect(Brush.verticalGradient(listOf(lerp(vista.skyTop, night, .25f), lerp(vista.skyLow, night, .50f), lerp(vista.skyLow, night, .30f))))
         drawRect(Brush.radialGradient(listOf(vista.glow.copy(alpha = .07f), Color.Transparent),

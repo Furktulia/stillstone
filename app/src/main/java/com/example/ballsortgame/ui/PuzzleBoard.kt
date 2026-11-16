@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -272,7 +273,8 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
         val numberPaint = remember {
             Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT }
         }
-        Canvas(Modifier.fillMaxSize().testTag("board_motion").semantics {
+        // Its own layer: while stones move only the board is drawn again, not the screen around it.
+        Canvas(Modifier.fillMaxSize().graphicsLayer().testTag("board_motion").semantics {
             stateDescription = "${frames.count { it.phase == FlightPhase.FLYING }} moving groups"
         }) {
             settlingFrame // Redraw while stones are settling.

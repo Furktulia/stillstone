@@ -261,6 +261,19 @@ Install updates over the app without uninstalling.
 Debug builds use the committed app/playtest-debug.keystore (see README). Do not delete or
 regenerate it: a changed signature forces every tester to uninstall and lose their save.
 
+**Give testers the playtest build, never the debug one** (2026-11-16): `.\gradlew.bat :app:assemblePlaytest`
+→ `app/build/outputs/apk/playtest/app-playtest.apk`. It is the release build (R8, library baseline
+profiles), signed with the same playtest key, so it installs over a debug build and keeps the save.
+A tester on a Xiaomi 12 Lite (Snapdragon 778G, 120 Hz) found the debug build laggy: Compose runs
+much slower in a debuggable, unoptimised app. The release build had never been run before and crashed
+at start (R8 `packageScope` limited to libraries); it now optimises the whole app.
+
+Keep drawing cheap for 120 Hz phones: still paintings (world sections, backdrops) and level path rows
+are drawn once into cached layers (`CompositingStrategy.Offscreen`), the board has its own layer so
+moving stones repaint only the board, and sounds and vibrations start on the `stone-feedback` thread,
+never on the main thread. The emulator renders through GPU translation with a ~16 ms GPU floor: it
+can show app-side and draw-command costs, not a phone's GPU cost.
+
 ## 8. Art and portability
 
 Production art sources are app/artwork/*.png.base64; Gradle DecodeWorldArtwork

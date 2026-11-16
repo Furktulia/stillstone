@@ -114,7 +114,14 @@ internal fun LevelPath(world: String, name: String, entries: List<IndexedValue<P
             val row = rows[r]
             val before = rows.getOrNull(r - 1)?.last()
             val after = rows.getOrNull(r + 1)?.first()
-            Box(Modifier.fillMaxWidth().height(rowHeight).drawBehind {
+            // A row is drawn once into its own layer, so scrolling only moves it: its lights, trail and
+            // textured stones are far too much to draw again every frame on a phone. Not the first and
+            // last rows, whose light spills past their edge, nor the row being played, whose halo
+            // reaches into its neighbours: a layer would cut those off on a straight line.
+            val cached = r != 0 && r != rows.lastIndex && r != playingRow
+            Box(Modifier.fillMaxWidth().height(rowHeight)
+                .then(if (cached) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen } else Modifier)
+                .drawBehind {
                 val left = trackLeft.toPx(); val wide = trackWidth.toPx(); val h = size.height
                 fun at(place: Int): Offset {
                     val column = columnOf(r, place, perRow)
@@ -145,7 +152,9 @@ internal fun LevelPath(world: String, name: String, entries: List<IndexedValue<P
                 val motes = java.util.Random((world.hashCode() * 31 + r).toLong())
                 val mote = moteColor(world)
                 repeat(2) {
-                    val p = Offset(motes.nextFloat() * size.width, motes.nextFloat() * h)
+                    // Kept a glow's width inside the row, so a cached row never cuts one off.
+                    val glow = 9.dp.toPx()
+                    val p = Offset(motes.nextFloat() * size.width, glow + motes.nextFloat() * (h - 2 * glow))
                     val bright = .25f + motes.nextFloat() * .55f
                     drawCircle(Brush.radialGradient(listOf(mote.copy(alpha = .16f * bright), Color.Transparent), p, 9.dp.toPx()), 9.dp.toPx(), p)
                     drawCircle(mote.copy(alpha = bright), (.7f + motes.nextFloat() * .7f).dp.toPx(), p)

@@ -41,8 +41,16 @@ android {
         release {
             optimization {
                 enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
             }
+        }
+        // What testers should get. Debug builds are unoptimised and debuggable, and Compose runs
+        // several times slower in them: a friend's Snapdragon 778G phone found the debug build laggy.
+        // This is the release build (shrunk and optimised, with the baseline profile), signed with
+        // the playtest key so it installs over earlier debug builds and keeps their saves.
+        create("playtest") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
         }
     }
     compileOptions {
