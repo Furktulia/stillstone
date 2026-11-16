@@ -105,7 +105,8 @@ internal fun rememberArtwork(name: String): ImageBitmap? {
 @Composable
 internal fun WorldBackdrop(id: String, modifier: Modifier = Modifier, selection: Boolean = false) {
     val look = worldLook(id)
-    BoxWithConstraints(modifier) {
+    // A still backdrop: drawn once into its own layer, so the level path scrolling over it never repaints it.
+    BoxWithConstraints(modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
         val wide = maxWidth > maxHeight
         val continuousFrame = selection && id == "five" && !wide
         val frame = rememberArtwork(if (continuousFrame) "midnight-portrait-v3"

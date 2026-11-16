@@ -3,6 +3,9 @@ package com.example.ballsortgame.ui
 import android.content.Context
 import android.media.*
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Process
 import android.os.SystemClock
 import android.os.VibrationAttributes
 import android.os.VibrationEffect
@@ -17,6 +20,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.pow
 import kotlin.math.sqrt
+
+/**
+ * Where sounds and vibrations are started. Each start is a call into an Android system service
+ * that can take milliseconds on a phone, and settling stones make several per frame: done on the
+ * main thread they made the bouncing stutter. A post to this waiting thread takes microseconds.
+ */
+private object FeedbackThread {
+    private val handler = Handler(HandlerThread("stone-feedback", Process.THREAD_PRIORITY_URGENT_AUDIO).apply { start() }.looper)
+    fun post(block: () -> Unit) { handler.post(block) }
+}
 
 /** Small locally synthesized stone taps. No downloads, music, or audio service. */
 internal class StoneAudio {
@@ -154,8 +167,8 @@ internal fun rememberGameFeedback(): GameFeedback {
         fun audible() = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
         GameFeedback(context, impactAction = { sound, haptic, event, style ->
             if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                if (sound && audible()) audio.impact(0, style, (0.7f + 0.12f * sqrt(event.dropSlots.coerceAtLeast(0f))).coerceIn(0.75f, 1f), event.balls)
-                if (haptic) haptics.tap((0.25f + 0.07f * sqrt(event.dropSlots.coerceAtLeast(0f))).coerceAtMost(0.55f))
+                if (sound && audible()) FeedbackThread.post { audio.impact(0, style, (0.7f + 0.12f * sqrt(event.dropSlots.coerceAtLeast(0f))).coerceIn(0.75f, 1f), event.balls) }
+                if (haptic) FeedbackThread.post { haptics.tap((0.25f + 0.07f * sqrt(event.dropSlots.coerceAtLeast(0f))).coerceAtMost(0.55f)) }
             }
         }, contactAction = { contact, style ->
             val now = SystemClock.uptimeMillis()
@@ -163,17 +176,19 @@ internal fun rememberGameFeedback(): GameFeedback {
             // is enough for that instant, and later bounces are heard separately.
             if (audible() && now - lastContact[contact.kind.ordinal] >= CONTACT_GAP_MS) {
                 lastContact[contact.kind.ordinal] = now
-                audio.contact(contact.kind, style, contactVolume(contact), 0.96f + random.nextFloat() * 0.08f)
+                val volume = contactVolume(contact); val pitch = 0.96f + random.nextFloat() * 0.08f
+                FeedbackThread.post { audio.contact(contact.kind, style, volume, pitch) }
             }
-        }, tapAction = { strength -> haptics.tap(strength) })
+        }, tapAction = { strength -> FeedbackThread.post { haptics.tap(strength) } })
     }
     LaunchedEffect(audio, feedback.style) { val style = feedback.style; withContext(Dispatchers.IO) { audio.prepare(style) } }
     DisposableEffect(audio, lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_PAUSE) audio.stop() }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_PAUSE) FeedbackThread.post { audio.stop() } }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); audio.release() }
+        // After any sounds still waiting to start, so none starts on a released track.
+        onDispose { lifecycle.removeObserver(observer); FeedbackThread.post { audio.release() } }
     }
-    LaunchedEffect(feedback.sound) { if (!feedback.sound) audio.stop() }
+    LaunchedEffect(feedback.sound) { if (!feedback.sound) FeedbackThread.post { audio.stop() } }
     return feedback
 }
 
