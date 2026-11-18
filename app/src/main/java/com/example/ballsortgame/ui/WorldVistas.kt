@@ -16,8 +16,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -76,8 +80,41 @@ internal fun WorldVistaSection(world: String, name: String, detail: String, heig
     Box(modifier.fillMaxWidth().height(height).testTag("world_$world")
         .semantics(mergeDescendants = true) { contentDescription = "$name. $detail"; role = Role.Button }
         .clickable(interactionSource = source, indication = null, onClick = open)) {
-        // A still painting: drawn once into its own layer, so scrolling the journey only moves it.
-        Canvas(Modifier.matchParentSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
+        Spacer(Modifier.matchParentSize().drawWithCache {
+            // The painted ground, faded at its top, is made once per size. Fading it while drawing
+            // needs an off-screen layer every frame; keeping whole screens in cached layers instead
+            // used so much graphics memory that the renderer began to drop its caches.
+            val ground = art?.let { art ->
+                // Only the landscape along the bottom of the wide painting is used, in the lower half
+                // of the stretch; the open sky above it is what lets one world run into the next.
+                // Same scale in both directions; only a window of the painting's width is shown.
+                val strip = art.height / 2
+                val scale = maxOf(size.height * .5f / strip, size.width / art.width)
+                val shownWidth = (size.width / scale).roundToInt().coerceAtMost(art.width)
+                val left = ((art.width - shownWidth) * vista.anchor).roundToInt()
+                // On a wide screen the painting is scaled by width and its strip would climb past the
+                // name, so only its lower part is shown there: at most 58% of the stretch.
+                val land = if (wide) strip.coerceAtMost((size.height * .58f / scale).roundToInt()) else strip
+                val drawnHeight = (land * scale).roundToInt().coerceAtLeast(1)
+                // Anything the painting carries up past the strip (a pillar, a branch) thins out
+                // into the sky instead of ending on a cut edge.
+                Ground(fadedStrip(art, IntOffset(left, art.height - land), IntSize(shownWidth, land),
+                    IntSize(size.width.roundToInt().coerceAtLeast(1), drawnHeight), 1f, .22f), left, scale)
+            }
+            // Rasterize the small crescent once. Only circles and an image reach the screen renderer.
+            val pale = Color(0xFFECE8DA)
+            val crescent = if (vista.moonAt >= 0f) {
+                val side = 26.dp.roundToPx().coerceAtLeast(1)
+                ImageBitmap(side, side).also { image ->
+                    CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(image),
+                        Size(side.toFloat(), side.toFloat())) {
+                        drawCircle(pale, 12.dp.toPx(), center)
+                        drawCircle(Color.Black, 11.dp.toPx(), center + Offset(6.dp.toPx(), -4.dp.toPx()),
+                            blendMode = BlendMode.Clear)
+                    }
+                }
+            } else null
+            onDrawBehind {
             drawRect(Brush.verticalGradient(listOf(vista.skyTop, vista.skyLow)))
             // The light of this place: low on the horizon at dusk, high and cool at night.
             val glowAt = Offset(size.width * .5f, size.height * if (world == "three") .74f else .30f)
@@ -91,37 +128,13 @@ internal fun WorldVistaSection(world: String, name: String, detail: String, heig
                 val at = Offset(random.nextFloat() * size.width, random.nextFloat() * size.height * if (vista.art == null) .92f else .56f)
                 drawCircle(Color.White.copy(alpha = .18f + random.nextFloat() * .55f), (.5f + random.nextFloat() * .9f).dp.toPx(), at)
             }
-            if (art != null) {
-                // Only the landscape along the bottom of the wide painting is used, in the lower half
-                // of the stretch; the open sky above it is what lets one world run into the next.
-                // Same scale in both directions; only a window of the painting's width is shown.
-                val strip = art.height / 2
-                val scale = maxOf(size.height * .5f / strip, size.width / art.width)
-                val shownWidth = (size.width / scale).roundToInt().coerceAtMost(art.width)
-                val left = ((art.width - shownWidth) * vista.anchor).roundToInt()
-                // On a wide screen the painting is scaled by width and its strip would climb past the
-                // name, so only its lower part is shown there: at most 58% of the stretch.
-                val land = if (wide) strip.coerceAtMost((size.height * .58f / scale).roundToInt()) else strip
-                if (vista.moonAt >= 0f) {
-                    val moon = Offset((vista.moonAt * art.width - left) * scale, size.height * .15f)
-                    val pale = Color(0xFFECE8DA)
+            if (art != null && ground != null) {
+                if (crescent != null) {
+                    val moon = Offset((vista.moonAt * art.width - ground.left) * ground.scale, size.height * .15f)
                     drawCircle(Brush.radialGradient(listOf(pale.copy(alpha = .22f), Color.Transparent), moon, 46.dp.toPx()), 46.dp.toPx(), moon)
-                    val full = Path().apply { addOval(androidx.compose.ui.geometry.Rect(moon, 12.dp.toPx())) }
-                    val bite = Path().apply { addOval(androidx.compose.ui.geometry.Rect(moon + Offset(6.dp.toPx(), -4.dp.toPx()), 11.dp.toPx())) }
-                    drawPath(Path().apply { op(full, bite, androidx.compose.ui.graphics.PathOperation.Difference) }, pale)
+                    drawImage(crescent, moon - Offset(crescent.width / 2f, crescent.height / 2f))
                 }
-                val drawnHeight = (land * scale).roundToInt()
-                val top = size.height - drawnHeight
-                // Anything the painting carries up past the strip (a pillar, a branch) thins out
-                // into the sky instead of ending on a cut edge.
-                val canvas = drawContext.canvas
-                canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, top, size.width, size.height), androidx.compose.ui.graphics.Paint())
-                drawImage(art, srcOffset = IntOffset(left, art.height - land), srcSize = IntSize(shownWidth, land),
-                    dstOffset = IntOffset(0, top.roundToInt()), dstSize = IntSize(size.width.roundToInt(), drawnHeight))
-                drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = top, endY = top + drawnHeight * .22f),
-                    topLeft = Offset(0f, top), size = Size(size.width, drawnHeight.toFloat()),
-                    blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
-                canvas.restore()
+                drawImage(ground.image, Offset(0f, (size.height - ground.image.height).roundToInt().toFloat()))
             } else if (vista.art == null) {
                 // The endless place has no ground: only its sign among the stars.
                 val a = size.width * .17f
@@ -141,7 +154,8 @@ internal fun WorldVistaSection(world: String, name: String, detail: String, heig
             drawRect(Brush.verticalGradient(listOf(Color.Transparent, into.copy(alpha = .55f), into),
                 startY = size.height * .80f, endY = size.height),
                 topLeft = Offset(0f, size.height * .80f), size = Size(size.width, size.height * .20f))
-        }
+            }
+        })
         Column(Modifier.align(BiasAlignment(0f, if (vista.art == null) .16f else -.34f)).padding(horizontal = 24.dp).pressSink(pressed, .93f),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Text(name, fontFamily = GameDisplayFont, style = MaterialTheme.typography.displaySmall, color = look.light)
@@ -159,8 +173,19 @@ internal fun WorldVistaSection(world: String, name: String, detail: String, heig
 internal fun PlayBackdrop(world: String, modifier: Modifier = Modifier) {
     val vista = remember(world) { vistaOf(world) }
     val art = vista.art?.let { rememberArtwork(it) }
-    // Drawn once into its own layer: moving stones above it must not repaint the painting every frame.
-    Canvas(modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
+    Spacer(modifier.drawWithCache {
+        // The dim ground, faded at its top, is made once per size, so moving stones never make it
+        // pass through an off-screen layer again, and no whole-screen layer holds graphics memory.
+        val ground = art?.let { art ->
+            val land = art.height / 2
+            val scale = size.width / art.width.coerceAtMost((size.width / (size.height * .30f / land)).roundToInt().coerceAtLeast(1))
+            val shownWidth = (size.width / scale).roundToInt().coerceAtMost(art.width)
+            val left = ((art.width - shownWidth) * vista.anchor).roundToInt()
+            val drawnHeight = (land * scale).roundToInt().coerceAtLeast(1)
+            fadedStrip(art, IntOffset(left, art.height - land), IntSize(shownWidth, land),
+                IntSize(size.width.roundToInt().coerceAtLeast(1), drawnHeight), .36f, .45f)
+        }
+        onDrawBehind {
         val night = Color(0xFF07060F)
         drawRect(Brush.verticalGradient(listOf(lerp(vista.skyTop, night, .25f), lerp(vista.skyLow, night, .50f), lerp(vista.skyLow, night, .30f))))
         drawRect(Brush.radialGradient(listOf(vista.glow.copy(alpha = .07f), Color.Transparent),
@@ -170,21 +195,25 @@ internal fun PlayBackdrop(world: String, modifier: Modifier = Modifier) {
             val at = Offset(random.nextFloat() * size.width, random.nextFloat() * size.height * if (vista.art == null) 1f else .7f)
             drawCircle(Color.White.copy(alpha = .05f + random.nextFloat() * .13f), (.5f + random.nextFloat() * .6f).dp.toPx(), at)
         }
-        if (art != null) {
-            val land = art.height / 2
-            val scale = size.width / art.width.coerceAtMost((size.width / (size.height * .30f / land)).roundToInt().coerceAtLeast(1))
-            val shownWidth = (size.width / scale).roundToInt().coerceAtMost(art.width)
-            val left = ((art.width - shownWidth) * vista.anchor).roundToInt()
-            val drawnHeight = (land * scale).roundToInt()
-            val top = size.height - drawnHeight
-            val canvas = drawContext.canvas
-            canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, top, size.width, size.height), androidx.compose.ui.graphics.Paint())
-            drawImage(art, srcOffset = IntOffset(left, art.height - land), srcSize = IntSize(shownWidth, land),
-                dstOffset = IntOffset(0, top.roundToInt()), dstSize = IntSize(size.width.roundToInt(), drawnHeight), alpha = .36f)
-            drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = top, endY = top + drawnHeight * .45f),
-                topLeft = Offset(0f, top), size = Size(size.width, drawnHeight.toFloat()),
-                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn)
-            canvas.restore()
+        if (ground != null) drawImage(ground, Offset(0f, (size.height - ground.height).roundToInt().toFloat()))
         }
+    })
+}
+
+private class Ground(val image: ImageBitmap, val left: Int, val scale: Float)
+
+/**
+ * [source] of [art] drawn at [shown] size with [alpha], fading in over the top [fade] of its height,
+ * made once into a bitmap. The same result as drawing it with a fade into an off-screen layer, which
+ * cost a layer on every frame.
+ */
+private fun fadedStrip(art: ImageBitmap, source: IntOffset, sourceSize: IntSize, shown: IntSize, alpha: Float, fade: Float): ImageBitmap {
+    val image = ImageBitmap(shown.width, shown.height)
+    CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(image),
+        Size(shown.width.toFloat(), shown.height.toFloat())) {
+        drawImage(art, srcOffset = source, srcSize = sourceSize, dstSize = shown, alpha = alpha)
+        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = 0f, endY = shown.height * fade),
+            blendMode = BlendMode.DstIn)
     }
+    return image
 }

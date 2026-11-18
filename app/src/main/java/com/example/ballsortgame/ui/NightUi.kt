@@ -96,15 +96,14 @@ internal fun SettingsButton(onClick: () -> Unit, modifier: Modifier = Modifier) 
         Canvas(Modifier.size(24.dp)) {
             val center = Offset(size.width / 2, size.height / 2)
             val radius = size.minDimension * .43f
-            val p = Path()
-            for (i in 0 until 32) {
+            var previous = center + Offset(0f, -radius * .78f)
+            for (i in 1..32) {
                 val angle = i * PI.toFloat() / 16f - PI.toFloat() / 2
                 val r = radius * if (i % 4 == 0 || i % 4 == 3) .78f else 1f
                 val point = center + Offset(cos(angle) * r, sin(angle) * r)
-                if (i == 0) p.moveTo(point.x, point.y) else p.lineTo(point.x, point.y)
+                drawLine(color, previous, point, 1.4.dp.toPx(), cap = StrokeCap.Round)
+                previous = point
             }
-            p.close()
-            drawPath(p, color, style = Stroke(1.4.dp.toPx(), join = StrokeJoin.Round))
             drawCircle(color, size.minDimension * .14f, center, style = Stroke(1.4.dp.toPx()))
         }
     }
