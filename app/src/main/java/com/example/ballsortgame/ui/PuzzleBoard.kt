@@ -36,8 +36,8 @@ import com.example.ballsortgame.game.GameUiState
  * The sixth and later are chosen to stay apart from the first five: a deep rose that is neither coral
  * nor lilac; a clear apricot, orange enough to stay apart from pink coral; a pale pearl.
  */
-val PieceColors = listOf(Color(0xFFEB9791), Color(0xFF86CDB6), Color(0xFFE7C36D), Color(0xFF8CB7E8), Color(0xFFB7A0DE),
-    Color(0xFFD9799E), Color(0xFFF4A462), Color(0xFFE9E3D4))
+val PieceColors = listOf(Color(0xFFECA99D), Color(0xFF86CDB6), Color(0xFFE7C36D), Color(0xFF8CB7E8), Color(0xFFA194D6),
+    Color(0xFFBA617F), Color(0xFFF4A462), Color(0xFFE9E3D4))
 val PieceNames = listOf("coral", "mint", "gold", "blue", "lilac", "rose", "apricot", "pearl")
 
 private class GroupFlight {
