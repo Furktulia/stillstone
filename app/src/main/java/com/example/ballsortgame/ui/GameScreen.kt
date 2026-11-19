@@ -72,8 +72,8 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                             Modifier.width(240.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            GameHeader(level, worldNumber, { if (browse != null) browse() else showLevels = true }, { showSettings = true }, showBrowse, extraAction)
-                            GameStatus(state, last, goNext)
+                            GameHeader(level, worldNumber, { if (browse != null) browse() else showLevels = true }, { showSettings = true }, showBrowse, extraAction, moved = state.canUndo)
+                            GameStatus(state, last, goNext, teach = level.worldId != "endless")
                             GameControls(state, actions, restart)
                         }
                     }
@@ -81,13 +81,13 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                     Column(
                         Modifier.fillMaxSize().widthIn(max = 640.dp).align(Alignment.Center).padding(vertical = 8.dp),
                     ) {
-                        GameHeader(level, worldNumber, { if (browse != null) browse() else showLevels = true }, { showSettings = true }, showBrowse, extraAction)
+                        GameHeader(level, worldNumber, { if (browse != null) browse() else showLevels = true }, { showSettings = true }, showBrowse, extraAction, moved = state.canUndo)
                         state.rules.target?.let { PatternTarget(it, state.colorLabels, state.board) }
                         PuzzleBoard(
                             state, tap, actions.finishTransfer,
                             Modifier.weight(1f).fillMaxWidth(), feedback::landing, feedback::contact, PlayOptions.hiddenColors,
                         )
-                        GameStatus(state, last, goNext)
+                        GameStatus(state, last, goNext, teach = level.worldId != "endless")
                         Spacer(Modifier.height(12.dp))
                         GameControls(state, actions, restart)
                         Spacer(Modifier.height(8.dp))
@@ -130,7 +130,7 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
 }
 
 @Composable
-private fun GameHeader(level: PlayableLevel, worldNumber: Int, puzzles: () -> Unit, settings: () -> Unit, showBrowse: Boolean, extraAction: (() -> Unit)?) {
+private fun GameHeader(level: PlayableLevel, worldNumber: Int, puzzles: () -> Unit, settings: () -> Unit, showBrowse: Boolean, extraAction: (() -> Unit)?, moved: Boolean = false) {
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         // The level number rides on the way back to its world: it is where you are, not a title.
         if (showBrowse) NightButton(if (level.worldId == "endless") "‹ Worlds" else "‹ ${level.collection} · $worldNumber",
@@ -141,19 +141,24 @@ private fun GameHeader(level: PlayableLevel, worldNumber: Int, puzzles: () -> Un
         SettingsButton(settings, Modifier.testTag("settings"))
     }
     // Only levels that differ from plain sorting say so, in a bubble that explains itself when tapped.
-    Box(Modifier.fillMaxWidth().padding(top = 2.dp), contentAlignment = Alignment.Center) { TraitBubbles(level) }
+    Box(Modifier.fillMaxWidth().padding(top = 2.dp), contentAlignment = Alignment.Center) { TraitBubbles(level, moved) }
 }
 
 @Composable
-private fun GameStatus(state: GameUiState, last: Boolean, next: () -> Unit) {
+private fun GameStatus(state: GameUiState, last: Boolean, next: () -> Unit, teach: Boolean = true) {
     val blocked = !state.solved && state.rules.legalMoves(com.example.ballsortgame.engine.RuledPosition(state.board, state.openSeals)).isEmpty()
     val text = when {
         state.solved -> ""
         state.message.isNotBlank() -> state.message
         blocked -> "No moves available. Undo, restart, or ask for a hint."
-        // The very first puzzle says how to start. After that the line stays empty unless
-        // something needs saying; each mode explains itself in its bubble instead.
-        state.levelIndex == 0 && !state.canUndo && state.selected == null && state.rules.isClassic -> "Tap a tube to begin."
+        // Every tube holds one color, yet a color is still split between two tubes.
+        state.rules.gather && state.board.isSolved -> "Almost: each color has to end up together in one tube."
+        // The first two puzzles teach the game in a line each: how to move, then what for. After
+        // that the line stays empty unless something needs saying; each mode explains itself in
+        // its bubble instead.
+        teach && state.levelIndex == 0 && !state.canUndo && state.rules.isClassic ->
+            if (state.selected == null) "Tap a tube to pick up its top stones." else "Now tap the tube where they should go."
+        teach && state.levelIndex == 1 && state.rules.isClassic -> "Give every color a tube of its own."
         else -> ""
     }
     // One slot of fixed height holds either a line of text or, once the puzzle is finished, the

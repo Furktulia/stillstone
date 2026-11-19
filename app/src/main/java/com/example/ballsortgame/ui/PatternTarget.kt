@@ -3,12 +3,15 @@ package com.example.ballsortgame.ui
 import androidx.compose.ui.graphics.drawscope.translate
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -23,8 +26,12 @@ internal fun PatternTarget(board: Board, labels: Boolean, current: Board? = null
     val look = LocalWorldLook.current
     // As large as five tubes side by side and a short screen allow: this is what the player works from.
     val slotDp = when { board.tubes.maxOf { it.capacity } >= 5 -> 26; board.tubes.size >= 5 -> 28; else -> 32 }
+    // New players took these small tubes for playable ones and tapped them without effect: a tap
+    // on the picture says what it is.
+    var explain by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)
+            .clickable(remember { MutableInteractionSource() }, indication = null, onClickLabel = "What is this?") { explain = !explain }) {
             board.tubes.forEachIndexed { index, tube ->
                 val matched = current != null && tube.balls.isNotEmpty() && current.tubes.getOrNull(index) == tube
                 Canvas(Modifier.weight(1f).height((slotDp * tube.capacity + 12).dp).semantics {
@@ -68,5 +75,8 @@ internal fun PatternTarget(board: Board, labels: Boolean, current: Board? = null
                 }
             }
         }
+        if (explain) ExplanationNote("The pattern to make",
+            "Move the stones in the big tubes below, one at a time, until they look the same.",
+            (slotDp * board.tubes.maxOf { it.capacity } + 12 + 6).dp, Modifier.testTag("pattern_note")) { explain = false }
     }
 }

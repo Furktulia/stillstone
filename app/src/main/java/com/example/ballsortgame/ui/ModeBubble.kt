@@ -123,40 +123,58 @@ private fun firstMeeting(context: Context, trait: LevelTrait): Boolean {
  * without being asked.
  */
 @Composable
-internal fun TraitBubbles(level: PlayableLevel, modifier: Modifier = Modifier) {
+internal fun TraitBubbles(level: PlayableLevel, moved: Boolean = false, modifier: Modifier = Modifier) {
     val traits = remember(level.id) { traitsOf(level) }
     if (traits.isEmpty()) return
     val context = LocalContext.current.applicationContext
     val look = LocalWorldLook.current
     var open by remember(level.id) { mutableStateOf<LevelTrait?>(null) }
-    LaunchedEffect(level.id) { open = traits.firstOrNull { firstMeeting(context, it) } }
+    // A note that opened by itself must not swallow the player's first tap: new players tapped the
+    // board, the tap only closed the note, and nothing seemed to happen. It lets taps through to the
+    // board and stays until the first move, so it can be read while starting to play.
+    var unasked by remember(level.id) { mutableStateOf(false) }
+    LaunchedEffect(level.id) { open = traits.firstOrNull { firstMeeting(context, it) }; unasked = open != null }
+    LaunchedEffect(moved) { if (moved && unasked) { open = null; unasked = false } }
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         for (trait in traits) Box {
             val shape = RoundedCornerShape(50)
             Row(Modifier.clip(shape)
                 .background(lerp(look.base, look.light, if (open == trait) .16f else .08f))
                 .border(1.dp, look.accent.copy(alpha = if (open == trait) .5f else .22f), shape)
-                .clickable(role = Role.Button, onClickLabel = "What is ${trait.title}?") { open = if (open == trait) null else trait }
+                .clickable(role = Role.Button, onClickLabel = "What is ${trait.title}?") { open = if (open == trait) null else trait; unasked = false }
                 .testTag("trait_" + trait.name.lowercase())
                 .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Canvas(Modifier.size(13.dp)) { drawTraitMark(trait, Offset(size.width / 2, size.height / 2), size.minDimension, look.light.copy(alpha = .8f)) }
                 Text(trait.title, style = MaterialTheme.typography.labelMedium, color = look.light.copy(alpha = .86f), maxLines = 1)
             }
-            if (open == trait) Popup(alignment = Alignment.TopCenter, offset = IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { 38.dp.roundToPx() }),
-                onDismissRequest = { open = null }, properties = PopupProperties(focusable = true)) {
-                val card = RoundedCornerShape(18.dp)
-                Column(Modifier.widthIn(max = 260.dp).clip(card)
-                    .background(lerp(look.base, look.light, .17f))
-                    .border(1.dp, look.accent.copy(alpha = .32f), card)
-                    .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { open = null }
-                    .testTag("trait_note")
-                    .padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text(trait.title, fontFamily = GameDisplayFont, style = MaterialTheme.typography.titleMedium, color = look.light)
-                    Spacer(Modifier.height(4.dp))
-                    Text(trait.explanation, style = MaterialTheme.typography.bodySmall, color = lerp(look.light, look.tube, .2f))
-                }
-            }
+            if (open == trait) ExplanationNote(trait.title, trait.explanation, 38.dp, Modifier.testTag("trait_note"),
+                letTapsThrough = unasked) { open = null; unasked = false }
+        }
+    }
+}
+
+/**
+ * A small note that grows out of what it explains, [below] the top of its parent, and closes on
+ * the next tap anywhere. The same card for every explanation in the game.
+ */
+@Composable
+internal fun ExplanationNote(title: String, text: String, below: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier,
+    letTapsThrough: Boolean = false, dismiss: () -> Unit) {
+    val look = LocalWorldLook.current
+    // Asked for, it closes on the next tap anywhere. Opened by itself, taps elsewhere reach the game
+    // and it stays until the caller closes it (or it is tapped).
+    Popup(alignment = Alignment.TopCenter, offset = IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { below.roundToPx() }),
+        onDismissRequest = dismiss, properties = PopupProperties(focusable = !letTapsThrough, dismissOnClickOutside = !letTapsThrough)) {
+        val card = RoundedCornerShape(18.dp)
+        Column(modifier.widthIn(max = 260.dp).clip(card)
+            .background(lerp(look.base, look.light, .17f))
+            .border(1.dp, look.accent.copy(alpha = .32f), card)
+            .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, onClick = dismiss)
+            .padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text(title, fontFamily = GameDisplayFont, style = MaterialTheme.typography.titleMedium, color = look.light)
+            Spacer(Modifier.height(4.dp))
+            Text(text, style = MaterialTheme.typography.bodySmall, color = lerp(look.light, look.tube, .2f))
         }
     }
 }
