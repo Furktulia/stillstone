@@ -19,7 +19,9 @@ import com.example.ballsortgame.game.GameUiState
 import com.example.ballsortgame.game.PlayableLevel
 
 @Composable
-fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameActions, browse: (() -> Unit)? = null, nextPuzzle: (() -> Unit)? = null, showBrowse: Boolean = true, showBackdrop: Boolean = true, extraAction: (() -> Unit)? = null) {
+fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameActions, browse: (() -> Unit)? = null, nextPuzzle: (() -> Unit)? = null, showBrowse: Boolean = true, showBackdrop: Boolean = true, extraAction: (() -> Unit)? = null,
+    /** Shown under the header, for example Infinite's difficulty. */ belowHeader: (@Composable () -> Unit)? = null,
+    /** A line from the screen around the game, shown in the status line when the game has none of its own. */ note: String = "") {
     var showLevels by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var compareSounds by rememberSaveable { mutableStateOf(false) }
@@ -73,7 +75,8 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
                             GameHeader(level, worldNumber, { if (browse != null) browse() else showLevels = true }, { showSettings = true }, showBrowse, extraAction, moved = state.canUndo)
-                            GameStatus(state, last, goNext, teach = level.worldId != "endless")
+                        belowHeader?.invoke()
+                            GameStatus(state, last, goNext, teach = level.worldId != "endless", note = note)
                             GameControls(state, actions, restart)
                         }
                     }
@@ -82,12 +85,13 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
                         Modifier.fillMaxSize().widthIn(max = 640.dp).align(Alignment.Center).padding(vertical = 8.dp),
                     ) {
                         GameHeader(level, worldNumber, { if (browse != null) browse() else showLevels = true }, { showSettings = true }, showBrowse, extraAction, moved = state.canUndo)
+                        belowHeader?.invoke()
                         state.rules.target?.let { PatternTarget(it, state.colorLabels, state.board) }
                         PuzzleBoard(
                             state, tap, actions.finishTransfer,
                             Modifier.weight(1f).fillMaxWidth(), feedback::landing, feedback::contact, PlayOptions.hiddenColors,
                         )
-                        GameStatus(state, last, goNext, teach = level.worldId != "endless")
+                        GameStatus(state, last, goNext, teach = level.worldId != "endless", note = note)
                         Spacer(Modifier.height(12.dp))
                         GameControls(state, actions, restart)
                         Spacer(Modifier.height(8.dp))
@@ -145,11 +149,12 @@ private fun GameHeader(level: PlayableLevel, worldNumber: Int, puzzles: () -> Un
 }
 
 @Composable
-private fun GameStatus(state: GameUiState, last: Boolean, next: () -> Unit, teach: Boolean = true) {
+private fun GameStatus(state: GameUiState, last: Boolean, next: () -> Unit, teach: Boolean = true, note: String = "") {
     val blocked = !state.solved && state.rules.legalMoves(com.example.ballsortgame.engine.RuledPosition(state.board, state.openSeals)).isEmpty()
     val text = when {
         state.solved -> ""
         state.message.isNotBlank() -> state.message
+        note.isNotBlank() -> note
         blocked -> "No moves available. Undo, restart, or ask for a hint."
         // Every tube holds one color, yet a color is still split between two tubes.
         state.rules.gather && state.board.isSolved -> "Almost: each color has to end up together in one tube."
@@ -254,6 +259,13 @@ internal fun SettingsDialog(state: GameUiState, feedback: GameFeedback, change: 
                     }
                     Text("Move pieces instantly, without travel animations.", style = MaterialTheme.typography.bodySmall)
                 }
+                // Which build this is, so a tester's notes can say exactly what they played.
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val version = remember(context) {
+                    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+                }
+                if (version != null) Text("Version $version", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .55f))
             }
         },
         confirmButton = { NightDialogAction("Done", primary = true, onClick = dismiss) },

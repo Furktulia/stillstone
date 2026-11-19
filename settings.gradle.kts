@@ -23,5 +23,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Ball sort game"
-include(":app", ":puzzle-engine")
+include(":app", ":puzzle-engine", ":baselineprofile")
  

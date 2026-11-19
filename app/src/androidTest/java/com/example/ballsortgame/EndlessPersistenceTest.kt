@@ -39,7 +39,7 @@ class EndlessPersistenceTest {
             main { game.settings(true, true); game.tapTube(move.source); game.tapTube(move.destination) }
             val board = game.state.value.board
             val latch = CountDownLatch(1)
-            main { model.bookmark("good", "offline sample") { assertEquals("Example saved offline.", it); latch.countDown() } }
+            main { model.bookmark("good", "offline sample") { assertEquals("Rating saved.", it); latch.countDown() } }
             assertTrue(latch.await(10, TimeUnit.SECONDS))
             val example = model.examples()
             assertTrue(example.contains("offline sample"))

@@ -172,8 +172,8 @@ class EndlessViewModel(context: Context) : ViewModel() {
                         try { out.write(value.toString().toByteArray()); target.finishWrite(out) }
                         catch(e: Exception) { target.failWrite(out); throw e }
                     }
-                    "Example saved offline."
-                } catch (_: Exception) { "Example could not be saved." }
+                    if (quality == "saved") "Puzzle saved." else "Rating saved."
+                } catch (_: Exception) { "The puzzle couldn't be saved. Check free storage." }
             }
             done(result)
         }
@@ -192,7 +192,7 @@ class EndlessViewModel(context: Context) : ViewModel() {
                     install(value)
                 }; prime()
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { mutable.value = mutable.value.copy(error = "Example could not be loaded.") }
+            catch (_: Exception) { mutable.value = mutable.value.copy(error = "That saved puzzle couldn't be opened.") }
             finally { mutable.value = mutable.value.copy(busy = false) }
         }
     }

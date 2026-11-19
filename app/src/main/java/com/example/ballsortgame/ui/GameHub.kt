@@ -50,6 +50,7 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
     var menu by rememberSaveable { mutableStateOf(false) }
     var enter by rememberSaveable { mutableStateOf(false) }
     var bookmark by rememberSaveable { mutableStateOf(false) }
+    var testers by rememberSaveable { mutableStateOf(false) }
     var code by rememberSaveable { mutableStateOf("") }
     var note by rememberSaveable { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
@@ -94,10 +95,16 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().statusBarsPadding(),
                             color = LocalWorldLook.current.accent.copy(alpha = .6f), trackColor = androidx.compose.ui.graphics.Color.Transparent)
                         if (state.error.isNotEmpty()) Text(state.error, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error)
-                        if (message.isNotEmpty()) Text(message, Modifier.padding(horizontal = 20.dp))
                         val game = state.game
                         if (game != null) {
                             val gameState by game.state.collectAsStateWithLifecycle()
+                            // A new difficulty starts a puzzle at once when nothing has been played yet;
+                            // a puzzle already under way is never thrown away by a tap on a pill.
+                            fun choose(difficulty: InfiniteDifficulty) {
+                                recipe = difficulty.letter.toString(); preferences.edit().putString("recipe", recipe).apply()
+                                message = if (!gameState.canUndo && !state.busy) { newPuzzle(); difficulty.explanation }
+                                    else "Your next puzzle will be ${difficulty.title}. ${difficulty.explanation}"
+                            }
                             Box(Modifier.weight(1f)) {
                                 GameContent(gameState, game.levels, GameActions(
                                     game::tapTube, game::finishTransfer, game::undo, game::restart,
@@ -105,10 +112,16 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                                     game::dismissRecovery, game::recover),
                                     browse = { openBrowser(null) },
                                     nextPuzzle = { if (!state.busy) newPuzzle() },
-                                    extraAction = { menu = true })
+                                    extraAction = { menu = true },
+                                    belowHeader = { DifficultyPills(state.code.split("-").getOrNull(1)?.singleOrNull() ?: recipe.first(), recipe.first(), gameState.canUndo, ::choose) },
+                                    note = message)
                             }
                         } else Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            if (state.busy) CircularProgressIndicator(color = LocalWorldLook.current.accent.copy(alpha = .6f), strokeWidth = 2.dp)
+                            if (state.busy) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = LocalWorldLook.current.accent.copy(alpha = .6f), strokeWidth = 2.dp)
+                                Spacer(Modifier.height(14.dp))
+                                Text("Making a puzzle…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                             else NightButton("Try another puzzle", onClick = { newPuzzle() })
                         }
                     }
@@ -134,49 +147,49 @@ fun GameHub(world: GameViewModel, owner: ViewModelStoreOwner) {
                 { browserSettings = false; browserCompare = true }, { browserSettings = false })
             if (browserCompare) SoundComparison(feedback) { browserCompare = false; browserSettings = true }
         }
-    if (menu) NightDialog(onDismissRequest = { menu = false }, title = { Text("Infinite play") }, text = {
+    // What a player needs: a new puzzle, and keeping one to come back to. Codes, ratings and export
+    // are for playtesting and wait one step further in, so the menu reads as part of the game.
+    if (menu) NightDialog(onDismissRequest = { menu = false }, title = { Text("Infinite") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            NightMenuRow(state.code.ifEmpty { "Preparing puzzle…" }, detail = "Tap to copy this puzzle's code") {
-                (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                    .setPrimaryClip(ClipData.newPlainText("Puzzle code", state.code))
-                message = "Code copied."
-            }
-            Spacer(Modifier.height(6.dp))
-            // Wraps instead of clipping a label on narrow dialogs or with large text.
-            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((letter, title) in listOf("R" to "Relaxed", "B" to "Balanced", "C" to "Challenge")) {
-                    NightChip(title, recipe == letter, Modifier.padding(vertical = 4.dp).testTag("recipe_$letter")) {
-                        recipe = letter; preferences.edit().putString("recipe", letter).apply() }
-                }
-            }
-            Text(when (recipe) {
-                "R" -> "A simple approach nearly always works."
-                "C" -> "Tempting moves can lose the puzzle. Expect to use Undo."
-                else -> "Some choices matter, and a few can be dead ends."
-            } + " Applies from the next new puzzle.", Modifier.padding(top = 6.dp, bottom = 8.dp), style = MaterialTheme.typography.bodySmall)
-            NightMenuRow("New puzzle", enabled = !state.busy) { newPuzzle(); menu = false }
-            NightMenuRow("Enter a puzzle code") { enter = true; menu = false }
-            NightMenuRow("Save this puzzle", enabled = state.game != null) { bookmark = true; menu = false }
+            NightMenuRow("New puzzle", detail = InfiniteDifficulty.of(recipe.first()).title, enabled = !state.busy) { newPuzzle(); menu = false }
+            NightMenuRow("Save this puzzle", detail = "Keep it to play again later", enabled = state.game != null) {
+                endless.bookmark("saved", "") { message = it }; menu = false }
             NightMenuRow("Saved puzzles") { scope.launch { saved = withContext(Dispatchers.IO) { endless.examples().lines().filter { it.isNotBlank() } } }; menu = false }
-            NightMenuRow("Export saved puzzles") { export.launch("ball-sort-examples.ndjson"); menu = false }
+            NightMenuRow("For testers ›", detail = "Puzzle codes, ratings and export") { testers = true; menu = false }
         }
     }, confirmButton = { NightDialogAction("Done", primary = true) { menu = false } })
+    if (testers) NightDialog(onDismissRequest = { testers = false }, title = { Text("For testers") }, text = {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            NightMenuRow(state.code.ifEmpty { "Making a puzzle…" }, detail = "Copy this puzzle's code") {
+                (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("Puzzle code", state.code))
+                message = "Code copied."; testers = false
+            }
+            NightMenuRow("Play a puzzle code") { enter = true; testers = false }
+            NightMenuRow("Rate this puzzle", detail = "Save it with a note on what worked", enabled = state.game != null) { bookmark = true; testers = false }
+            NightMenuRow("Export saved puzzles") { export.launch("ball-sort-examples.ndjson"); testers = false }
+        }
+    }, confirmButton = { NightDialogAction("Done", primary = true) { testers = false } })
     saved?.let { examples ->
         NightDialog(onDismissRequest = { saved = null }, title = { Text("Saved puzzles") },
             text = { androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 400.dp)) {
-                if (examples.isEmpty()) item { Text("No puzzles saved yet.") }
+                if (examples.isEmpty()) item { Text("Puzzles you save appear here.") }
                 items(examples.size) { index ->
                     val value = org.json.JSONObject(examples[index])
-                    NightMenuRow(value.optString("code"), detail = listOf(value.optString("quality"), value.optString("note")).filter { it.isNotBlank() }.joinToString(" · ")) {
+                    val puzzleCode = value.optString("code")
+                    // "E2-B-…": the middle letter is the difficulty; H codes are hidden-colour puzzles.
+                    val title = InfiniteDifficulty.of(puzzleCode.split("-").getOrNull(1)?.singleOrNull() ?: 'B').title +
+                        if (puzzleCode.startsWith("H")) " · hidden colors" else ""
+                    NightMenuRow(title, detail = value.optString("note").ifBlank { puzzleCode }) {
                         endless.loadSaved(examples[index]); saved = null }
                 }
             } }, confirmButton = { NightDialogAction("Done", primary = true) { saved = null } })
     }
-    if (enter) NightDialog(onDismissRequest = { enter = false }, title = { Text("Replay a code") },
+    if (enter) NightDialog(onDismissRequest = { enter = false }, title = { Text("Play a puzzle code") },
         text = { NightTextField(code, { code = it }, "For example E2-B-1") },
-        confirmButton = { NightDialogAction("Load", primary = true) { newPuzzle(code); enter = false } },
+        confirmButton = { NightDialogAction("Play", primary = true) { newPuzzle(code); enter = false } },
         dismissButton = { NightDialogAction("Cancel") { enter = false } })
-    if (bookmark) NightDialog(onDismissRequest = { bookmark = false }, title = { Text("Save this puzzle") },
+    if (bookmark) NightDialog(onDismissRequest = { bookmark = false }, title = { Text("Rate this puzzle") },
         text = { Column { Text("Hard can be good. Describe what worked or felt wrong."); Spacer(Modifier.height(10.dp)); NightTextField(note, { note = it }, "Optional note") } },
         confirmButton = { NightDialogAction("Good example") { endless.bookmark("good", note) { message = it }; bookmark = false; note = "" } },
         dismissButton = { NightDialogAction("Needs work") { endless.bookmark("needs-work", note) { message = it }; bookmark = false; note = "" } })

@@ -270,11 +270,26 @@ A tester on a Xiaomi 12 Lite (Snapdragon 778G, 120 Hz) found the debug build lag
 much slower in a debuggable, unoptimised app. The release build had never been run before and crashed
 at start (R8 `packageScope` limited to libraries); it now optimises the whole app.
 
-Keep drawing cheap for 120 Hz phones: still paintings (world sections, backdrops) and level path rows
-are drawn once into cached layers (`CompositingStrategy.Offscreen`), the board has its own layer so
+Keep drawing cheap for 120 Hz phones: level path rows are drawn once into small cached layers
+(`CompositingStrategy.Offscreen`); the painted ground of world sections and the play backdrop is faded
+once into a bitmap of the size shown (`fadedStrip` in WorldVistas.kt) instead of through a layer every
+frame. Do not cache whole screens in layers: on 2026-11-16, with full-screen cached backdrops, the
+creator saw every curved shape (stone bodies, the gear) vanish on the emulator after going in and out of
+levels. It was not reproduced in 52 later rounds, so the cause is unproven; the full-screen layers were
+removed as the likeliest contributor. The board has its own layer so
 moving stones repaint only the board, and sounds and vibrations start on the `stone-feedback` thread,
 never on the main thread. The emulator renders through GPU translation with a ~16 ms GPU floor: it
 can show app-side and draw-command costs, not a phone's GPU cost.
+
+**First launch and build numbers** (2026-11-16). The game ships its own baseline profile
+(`app/src/main/generated/baselineProfiles`, about 1,200 of its own methods and classes plus the libraries):
+Android compiles that code ahead of time instead of interpreting it in the first sessions. On sideloaded
+APKs ProfileInstaller hands it to Android, which compiles it during its next background optimisation.
+Regenerate after larger UI changes with `.\gradlew.bat :app:generateBaselineProfile`: it plays the game
+on a Gradle managed emulator (pixel6Api34, ATD image), never on the playtest emulator, whose save is real.
+Release shrinking uses `isMinifyEnabled` because the profile plugin only switches that form off for its
+unobfuscated recording build. `versionCode` is the git commit count (`versionName` 0.N), shown at the
+bottom of settings, so a tester can say exactly which build they played.
 
 ## 8. Art and portability
 
