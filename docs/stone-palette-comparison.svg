@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 602" width="520" height="602"><title>Current and proposed game stone colors</title><defs><radialGradient id="shine" cx="28%" cy="18%" r="90%"><stop offset="0" stop-color="#f6e9de" stop-opacity=".12"/><stop offset="1" stop-color="#f6e9de" stop-opacity="0"/></radialGradient><linearGradient id="s00" x2="100%" y2="100%"><stop offset="0" stop-color="#eda9a1"/><stop offset=".5" stop-color="#eb9b94"/><stop offset="1" stop-color="#a06965"/></linearGradient>
+<linearGradient id="s01" x2="100%" y2="100%"><stop offset="0" stop-color="#eeb7ab"/><stop offset=".5" stop-color="#ecaca0"/><stop offset="1" stop-color="#a0756d"/></linearGradient>
+<linearGradient id="s10" x2="100%" y2="100%"><stop offset="0" stop-color="#c5b0de"/><stop offset=".5" stop-color="#baa3de"/><stop offset="1" stop-color="#7e6f97"/></linearGradient>
+<linearGradient id="s11" x2="100%" y2="100%"><stop offset="0" stop-color="#b4a7d7"/><stop offset=".5" stop-color="#a598d6"/><stop offset="1" stop-color="#706792"/></linearGradient>
+<linearGradient id="s20" x2="100%" y2="100%"><stop offset="0" stop-color="#df91ac"/><stop offset=".5" stop-color="#da7ea1"/><stop offset="1" stop-color="#94566d"/></linearGradient>
+<linearGradient id="s21" x2="100%" y2="100%"><stop offset="0" stop-color="#c77e93"/><stop offset=".5" stop-color="#bd6783"/><stop offset="1" stop-color="#814659"/></linearGradient>
+<linearGradient id="s30" x2="100%" y2="100%"><stop offset="0" stop-color="#f4b37d"/><stop offset=".5" stop-color="#f4a768"/><stop offset="1" stop-color="#a67247"/></linearGradient>
+<linearGradient id="s31" x2="100%" y2="100%"><stop offset="0" stop-color="#f4b37d"/><stop offset=".5" stop-color="#f4a768"/><stop offset="1" stop-color="#a67247"/></linearGradient>
+<linearGradient id="s40" x2="100%" y2="100%"><stop offset="0" stop-color="#a3c2e6"/><stop offset=".5" stop-color="#91b9e8"/><stop offset="1" stop-color="#637e9e"/></linearGradient>
+<linearGradient id="s41" x2="100%" y2="100%"><stop offset="0" stop-color="#a3c2e6"/><stop offset=".5" stop-color="#91b9e8"/><stop offset="1" stop-color="#637e9e"/></linearGradient>
+<linearGradient id="s50" x2="100%" y2="100%"><stop offset="0" stop-color="#9ed3bf"/><stop offset=".5" stop-color="#8bceb8"/><stop offset="1" stop-color="#5f8c7d"/></linearGradient>
+<linearGradient id="s51" x2="100%" y2="100%"><stop offset="0" stop-color="#9ed3bf"/><stop offset=".5" stop-color="#8bceb8"/><stop offset="1" stop-color="#5f8c7d"/></linearGradient>
+<linearGradient id="s60" x2="100%" y2="100%"><stop offset="0" stop-color="#ebcb85"/><stop offset=".5" stop-color="#e8c572"/><stop offset="1" stop-color="#9e864e"/></linearGradient>
+<linearGradient id="s61" x2="100%" y2="100%"><stop offset="0" stop-color="#ebcb85"/><stop offset=".5" stop-color="#e8c572"/><stop offset="1" stop-color="#9e864e"/></linearGradient>
+<linearGradient id="s70" x2="100%" y2="100%"><stop offset="0" stop-color="#ece4d6"/><stop offset=".5" stop-color="#eae3d4"/><stop offset="1" stop-color="#9f9a90"/></linearGradient>
+<linearGradient id="s71" x2="100%" y2="100%"><stop offset="0" stop-color="#ece4d6"/><stop offset=".5" stop-color="#eae3d4"/><stop offset="1" stop-color="#9f9a90"/></linearGradient></defs><rect width="520" height="602" fill="#232230"/><g font-family="Segoe UI, sans-serif"><text x="28" y="38" font-size="26" fill="#ede8e2">Stone palette comparison</text>
+<text x="165" y="82" font-size="17" fill="#ede8e2">Current</text>
+<text x="343" y="82" font-size="17" fill="#ede8e2">Proposed</text>
+<text x="28" y="127" font-size="17" fill="#ede8e2">Coral</text>
+<ellipse cx="185" cy="139" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="164" y="101" width="42" height="42" rx="19.32" fill="url(#s00)"/><rect x="164" y="101" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="217" y="127" font-size="14" fill="#c5c2cc">#EB9791</text>
+<ellipse cx="363" cy="139" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="342" y="101" width="42" height="42" rx="19.32" fill="url(#s01)"/><rect x="342" y="101" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="395" y="127" font-size="14" fill="#c5c2cc">#ECA99D</text>
+<text x="28" y="190" font-size="17" fill="#ede8e2">Lilac</text>
+<ellipse cx="185" cy="202" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="164" y="164" width="42" height="42" rx="19.32" fill="url(#s10)"/><rect x="164" y="164" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="217" y="190" font-size="14" fill="#c5c2cc">#B7A0DE</text>
+<ellipse cx="363" cy="202" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="342" y="164" width="42" height="42" rx="19.32" fill="url(#s11)"/><rect x="342" y="164" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="395" y="190" font-size="14" fill="#c5c2cc">#A194D6</text>
+<text x="28" y="253" font-size="17" fill="#ede8e2">Rose</text>
+<ellipse cx="185" cy="265" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="164" y="227" width="42" height="42" rx="19.32" fill="url(#s20)"/><rect x="164" y="227" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="217" y="253" font-size="14" fill="#c5c2cc">#D9799E</text>
+<ellipse cx="363" cy="265" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="342" y="227" width="42" height="42" rx="19.32" fill="url(#s21)"/><rect x="342" y="227" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="395" y="253" font-size="14" fill="#c5c2cc">#BA617F</text>
+<path d="M28 280h460" stroke="#454351"/>
+<text x="28" y="316" font-size="17" fill="#ede8e2">Apricot</text>
+<ellipse cx="185" cy="328" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="164" y="290" width="42" height="42" rx="19.32" fill="url(#s30)"/><rect x="164" y="290" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="217" y="316" font-size="14" fill="#c5c2cc">#F4A462</text>
+<ellipse cx="363" cy="328" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="342" y="290" width="42" height="42" rx="19.32" fill="url(#s31)"/><rect x="342" y="290" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="395" y="316" font-size="14" fill="#c5c2cc">#F4A462</text>
+<text x="28" y="379" font-size="17" fill="#ede8e2">Blue</text>
+<ellipse cx="185" cy="391" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="164" y="353" width="42" height="42" rx="19.32" fill="url(#s40)"/><rect x="164" y="353" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="217" y="379" font-size="14" fill="#c5c2cc">#8CB7E8</text>
+<ellipse cx="363" cy="391" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="342" y="353" width="42" height="42" rx="19.32" fill="url(#s41)"/><rect x="342" y="353" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="395" y="379" font-size="14" fill="#c5c2cc">#8CB7E8</text>
+<text x="28" y="442" font-size="17" fill="#ede8e2">Mint</text>
+<ellipse cx="185" cy="454" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="164" y="416" width="42" height="42" rx="19.32" fill="url(#s50)"/><rect x="164" y="416" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="217" y="442" font-size="14" fill="#c5c2cc">#86CDB6</text>
+<ellipse cx="363" cy="454" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="342" y="416" width="42" height="42" rx="19.32" fill="url(#s51)"/><rect x="342" y="416" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="395" y="442" font-size="14" fill="#c5c2cc">#86CDB6</text>
+<text x="28" y="505" font-size="17" fill="#ede8e2">Gold</text>
+<ellipse cx="185" cy="517" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="164" y="479" width="42" height="42" rx="19.32" fill="url(#s60)"/><rect x="164" y="479" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="217" y="505" font-size="14" fill="#c5c2cc">#E7C36D</text>
+<ellipse cx="363" cy="517" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="342" y="479" width="42" height="42" rx="19.32" fill="url(#s61)"/><rect x="342" y="479" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="395" y="505" font-size="14" fill="#c5c2cc">#E7C36D</text>
+<text x="28" y="568" font-size="17" fill="#ede8e2">Pearl</text>
+<ellipse cx="185" cy="580" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="164" y="542" width="42" height="42" rx="19.32" fill="url(#s70)"/><rect x="164" y="542" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="217" y="568" font-size="14" fill="#c5c2cc">#E9E3D4</text>
+<ellipse cx="363" cy="580" rx="18" ry="4" fill="#000" opacity=".18"/><rect x="342" y="542" width="42" height="42" rx="19.32" fill="url(#s71)"/><rect x="342" y="542" width="42" height="42" rx="19.32" fill="url(#shine)"/>
+<text x="395" y="568" font-size="14" fill="#c5c2cc">#E9E3D4</text></g></svg>
