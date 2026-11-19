@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import com.example.ballsortgame.game.GameUiState
+import kotlinx.coroutines.launch
 
 /**
  * Stone colours, in the order levels number them. Every level must use only colours listed here:
@@ -45,8 +46,8 @@ private class GroupFlight {
     val progress = Animatable(0f)
     var started by mutableStateOf(false)
     var landed by mutableStateOf(false)
-    /** Height above rest when the group left a tube that was still settling. */
-    var lift = 0f
+    /** Each stone's height above its slot when the group left, top stone first (bead packing, settling). */
+    var lift = FloatArray(0)
     val phase get() = when {
         landed -> FlightPhase.LANDED
         started -> FlightPhase.FLYING
@@ -130,47 +131,51 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
             }
         }
         var settlingFrame by remember { mutableIntStateOf(0) }
-        // Each landing asks the settling loop to run. A counter, not an on/off flag: when the loop
-        // finished and a group landed in the same frame, the flag went false then true again, the
-        // effect saw no change and never restarted, and the board froze mid-bounce for good.
-        var settleRequests by remember(settling) { mutableIntStateOf(0) }
-        var beadHandoffTime by remember(settling) { mutableLongStateOf(0L) }
         var settledEpoch by remember { mutableIntStateOf(0) }
         val stationary = stationaryPieces(frames, state.board)
         stationary.forEachIndexed { tube, stones -> settling.sync(tube, stones.size) }
-        LaunchedEffect(settling, settleRequests) {
-            if (settleRequests == 0) return@LaunchedEffect
-            var last = if (beadHandoffTime != 0L) beadHandoffTime else withFrameNanos { it }
-            while (settling.awake) {
-                val now = withFrameNanos { it }
-                val moving = settling.awakeCount
-                // Stones still in the air over a tube are solid to the stones bouncing inside it.
-                val airborne = hovering()
-                layout.forEachIndexed { tube, geometry ->
-                    val top = settling.size(tube) - 1
-                    var lid = Float.POSITIVE_INFINITY
-                    if (top >= 0) for ((source, stone) in airborne) {
-                        // Stones lifting out of this very tube are leaving, not blocking it.
-                        if (source == tube) continue
-                        val dx = kotlin.math.abs(stone.x - geometry.centerX)
-                        val flatten = if (beads) settling.squash(tube, top) else 0f
-                        val diameter = geometry.slot * if (beads) SettlingColumns.BEAD_DIAMETER else 1f
-                        val horizontal = diameter * 0.5f * (1f + 1f / kotlin.math.sqrt(1f - flatten))
-                        if (dx >= horizontal * 0.95f) continue
-                        val reach = diameter * (1f - flatten * 0.5f) *
-                            kotlin.math.sqrt(1f - dx * dx / (horizontal * horizontal))
-                        lid = minOf(lid, geometry.pieceY(top, density) - stone.y - reach -
-                            (settling.visibleOffset(tube, top) - settling.offset(tube, top)))
+        // One settling loop runs while anything in the tubes moves. The landing that wakes the board
+        // starts it directly, continuing from that landing's frame. It used to be restarted through
+        // recomposition, which held the landing stone just above the contact for a frame or two and,
+        // with stones, froze every other bouncing stone for a frame at each landing.
+        val settleScope = rememberCoroutineScope()
+        val settleLoop = remember(settling) { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+        DisposableEffect(settling) { onDispose { settleLoop[0]?.cancel() } }
+        fun settle(from: Long) {
+            settleLoop[0]?.cancel()
+            settleLoop[0] = settleScope.launch {
+                var last = from
+                while (settling.awake) {
+                    val now = withFrameNanos { it }
+                    val moving = settling.awakeCount
+                    // Stones still in the air over a tube are solid to the stones bouncing inside it.
+                    val airborne = hovering()
+                    layout.forEachIndexed { tube, geometry ->
+                        val top = settling.size(tube) - 1
+                        var lid = Float.POSITIVE_INFINITY
+                        if (top >= 0) for ((source, stone) in airborne) {
+                            // Stones lifting out of this very tube are leaving, not blocking it.
+                            if (source == tube) continue
+                            val dx = kotlin.math.abs(stone.x - geometry.centerX)
+                            val flatten = if (beads) settling.squash(tube, top) else 0f
+                            val diameter = geometry.slot * if (beads) SettlingColumns.BEAD_DIAMETER else 1f
+                            val horizontal = diameter * 0.5f * (1f + 1f / kotlin.math.sqrt(1f - flatten))
+                            if (dx >= horizontal * 0.95f) continue
+                            val reach = diameter * (1f - flatten * 0.5f) *
+                                kotlin.math.sqrt(1f - dx * dx / (horizontal * horizontal))
+                            lid = minOf(lid, geometry.pieceY(top, density) - stone.y - reach -
+                                (settling.visibleOffset(tube, top) - settling.offset(tube, top)))
+                        }
+                        settling.lid(tube, lid)
                     }
-                    settling.lid(tube, lid)
+                    settling.step((now - last) / 1_000_000_000f)
+                    settling.drainContacts().forEach { contactCallback(it) }
+                    last = now
+                    settlingFrame++
+                    if (settling.awakeCount != moving) settledEpoch++ // A tube came to rest: its group can retire.
                 }
-                settling.step((now - last) / 1_000_000_000f)
-                settling.drainContacts().forEach { contactCallback(it) }
-                last = now
-                settlingFrame++
-                if (settling.awakeCount != moving) settledEpoch++ // A tube came to rest: its group can retire.
+                settledEpoch++
             }
-            settledEpoch++
         }
         groups.forEachIndexed { index, group ->
             key(group.id) {
@@ -181,7 +186,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                     if (ready && !flight.started) {
                         val route = currentRoutes
                         val source = group.move.source
-                        flight.lift = settling.offset(source, group.before.tubes[source].balls.size - group.count)
+                        flight.lift = settling.departing(source, group.before.tubes[source].balls.size, group.count)
                         val ahead = mustLandAfter(group, groups.take(index)).mapNotNull { runtimes[it.id] }
                         flight.started = true
                         if (route != null) {
@@ -263,12 +268,10 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                                     height - falling <= settling.topOffset(destination) + rising) break
                             }
                             val speed = LandingMotion.fallSpeed(route.fallHeight - height, slot)
-                            val needsClock = !beads || !settling.awake
+                            // A running settling loop takes the new group from its next frame on.
+                            val running = settling.awake
                             settling.land(destination, group.count, height, speed)
-                            if (needsClock) {
-                                beadHandoffTime = if (beads) last else 0L
-                                settleRequests++
-                            }
+                            if (!running) settle(last)
                             flight.landed = true
                             impactCallback(LandingImpact(group.count, drops[index] / slot))
                         } else flight.landed = true
@@ -369,9 +372,11 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                     val color = requireNotNull(group.before.tubes[group.move.source].top)
                     val progress = flights[index].progress.value
                     val t = LandingMotion.distance(progress, releaseFractions[index])
-                    val lift = flights[index].lift * (1 - (progress / (LandingMotion.release * 0.4f)).coerceIn(0f, 1f))
-                    routes[index]?.at(t)?.forEach { point ->
-                        drawStone(Offset(point.x, point.y - lift), layout[group.move.source].slot, color, state.colorLabels, numberPaint, look)
+                    val fade = 1 - (progress / (LandingMotion.release * 0.4f)).coerceIn(0f, 1f)
+                    val lift = flights[index].lift
+                    routes[index]?.at(t)?.forEachIndexed { stone, point ->
+                        drawStone(Offset(point.x, point.y - lift.getOrElse(stone) { 0f } * fade), layout[group.move.source].slot,
+                            color, state.colorLabels, numberPaint, look)
                     }
                 }
             }

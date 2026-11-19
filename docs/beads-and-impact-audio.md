@@ -84,5 +84,43 @@ bead rendering, and impact playback.
   test preferences. Preserve the playtest save. Confirm actual video and sound
   before making aesthetic or phone performance claims.
 
+## Independent review (2026-11-19, after 8756022)
+
+Rebound against the real fall was replayed in a JVM probe on the actual Dusk 25 and Dusk 29
+layouts (392×560 dp board). Every route into Dusk 25's bottom-right tube aligns just under
+the tube above it, so the fall is 3.2 slots whatever the route length. The purple pair
+(3>6) rebounds 1.3–1.4 slots as stones and 0.2–0.6 slots as beads, well below the 3.3-slot
+overhead clearance. Dusk 29's long falls from the top row are 13.3 slots and rebound 6.6
+slots (stone) or 5.1 slots (bead) under a 14-slot clearance. The model matches the fall;
+four defects in the surrounding code were fixed:
+
+- **Hold before impact.** A landing woke the settling loop through recomposition, so it
+  started a frame late: the stone was drawn just above the contact for an extra frame. With
+  stones the restart also cancelled the running loop, losing a frame for every stone still
+  bouncing. The landing now starts the loop itself, continuing from the landing's frame.
+  `GroupMotionUiTest.stoneLandingIsHeardOnTheNextFrame` failed (contact two frames after
+  landing) while the loop was still restarted through recomposition, and passes now.
+- **Echo taps on a bead stack.** A bead landing on resting beads reported a second, quieter
+  contact about 2 ms later, as the pulse passed through the pair that already touched.
+  Contacts are now reported only when a separated pair meets (gap over 0.01 slot).
+- **Identical bead taps.** Every bead contact used one clip per kind. Three pitch variants
+  per kind are now taken in turn.
+- **Bead group springing apart at pickup.** A departing group used the lowest stone's packed
+  offset for all its stones, so the beads above it jumped up 0.14 slot each in the first
+  frame of flight. Each stone now starts from its own drawn position.
+
+Not changed, for a listening check: the stone headroom cap ducks a contact that starts
+within about 4 ms of a loud one by up to about 6 dB (0.85 → 0.44 gain in River), while
+the true sample-aligned sum would exceed full scale by at most about 1.2 dB. The cap is
+deliberately conservative because the system mixer's start alignment is not known.
+
+Emulator cost comparison (managed pixel6Api34, debug build, two rounds; emulator results, not
+phone figures). One 60 Hz settling step while three groups of three land: median 0.16–0.24 ms
+for stones and 0.09–0.15 ms for beads. Recording the whole window with a 32-piece board into a
+software Picture: median 5.8–8.9 ms for stones and 3.8–4.2 ms for beads. Run-to-run noise is
+large (p99 up to 2.4 ms and 64 ms), but nothing suggests beads cost more than stones. Real-frame
+FrameMetrics reported no frames on the headless managed device, so GPU and frame-time cost on
+a phone remain unmeasured.
+
 Physics references used for the behavior are [soft gel-ball impacts on a rigid surface](https://eprints.lib.hokudai.ac.jp/repo/huscap/all/8431/PRE_73_031403.pdf)
 and [impulsive loading of bead chains](https://experts.illinois.edu/en/publications/experimental-study-of-embedded-and-non-embedded-ordered-granular-/).

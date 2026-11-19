@@ -22,6 +22,18 @@ class ImpactSoundsTest {
         assertTrue(soft in 0.05f..0.5f && hard > soft * 1.8f && hard <= 1f)
     }
 
+    @Test fun beadContactVariantsDifferAndStayInRange() {
+        for (kind in ContactKind.entries) {
+            val variants = List(3) { ImpactSounds.beadContact(kind, it) }
+            assertEquals(3, variants.map { it.toList() }.distinct().size)
+            variants.forEach { pcm ->
+                val peak = pcm.maxOf { kotlin.math.abs(it.toInt()) }
+                assertTrue("$kind peak $peak", peak in 4000..28000)
+                assertEquals(0, pcm.last().toInt())
+            }
+        }
+    }
+
     @Test fun riverStoneContactsCanClipWhenTheirPeaksOverlap() {
         val floor = ImpactSounds.renderContact(ImpactStyle.RIVER, ContactKind.FLOOR)
         val stone = ImpactSounds.renderContact(ImpactStyle.RIVER, ContactKind.STONE)

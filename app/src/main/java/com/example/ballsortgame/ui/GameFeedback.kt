@@ -75,7 +75,7 @@ internal class StoneAudio {
                 load(ImpactSounds.render(style, if (preview) deep else true, if (preview) balls else voice / 2 + 1, voice % 2))
             }
             if (!preview && beads) {
-                contacts = ContactPlayer(ContactKind.entries.associateWith { ImpactSounds.beadContact(it, 1) })
+                contacts = ContactPlayer(ContactKind.entries.associateWith { kind -> List(3) { ImpactSounds.beadContact(kind, it) } })
             } else if (!preview) {
                 for (kind in ContactKind.entries) repeat(CONTACT_VOICES) { voice ->
                     val pcm = ImpactSounds.renderContact(style, kind, voice % 3)

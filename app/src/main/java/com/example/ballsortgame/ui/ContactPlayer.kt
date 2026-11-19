@@ -50,7 +50,9 @@ internal class ContactMixer {
 }
 
 /** A single output stream mixes short contacts and sleeps between landings. */
-internal class ContactPlayer(private val clips: Map<ContactKind, ShortArray>) {
+/** [clips] holds a few variants per kind, taken in turn so that successive taps are never identical. */
+internal class ContactPlayer(private val clips: Map<ContactKind, List<ShortArray>>) {
+    private val cursor = IntArray(ContactKind.entries.size)
     private val lock = Object()
     private val mixer = ContactMixer()
     private var closed = false
@@ -82,7 +84,10 @@ internal class ContactPlayer(private val clips: Map<ContactKind, ShortArray>) {
     }
 
     fun hit(kind: ContactKind, gain: Float, delaySeconds: Float = 0f) = synchronized(lock) {
-        if (!closed) mixer.hit(clips.getValue(kind), gain, (delaySeconds * ImpactSounds.rate).roundToInt())
+        if (!closed) {
+            val variants = clips.getValue(kind)
+            mixer.hit(variants[cursor[kind.ordinal]++ % variants.size], gain, (delaySeconds * ImpactSounds.rate).roundToInt())
+        }
         lock.notifyAll()
     }
     fun stop() = synchronized(lock) {

@@ -45,7 +45,9 @@ internal fun PatternTarget(board: Board, labels: Boolean, current: Board? = null
                         style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
                     tube.balls.forEachIndexed { place, color ->
                         val d = slot * .82f
-                        val center = Offset(size.width / 2, bottom - 4.dp.toPx() - (place + .5f) * slot)
+                        // Beads rest touching in the tubes below, so they touch here too.
+                        val pitch = if (PlayOptions.waterBeads) d else slot
+                        val center = Offset(size.width / 2, bottom - 4.dp.toPx() - d / 2 - (slot - d) / 2 - place * pitch)
                         if (PlayOptions.waterBeads) {
                             translate(center.x - d / 2, center.y - d / 2) {
                                 drawWaterBead(center, d, PieceColors[color % PieceColors.size], look, 0f)

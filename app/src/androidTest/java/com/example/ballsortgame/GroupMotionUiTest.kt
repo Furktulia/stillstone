@@ -15,6 +15,34 @@ import org.junit.Test
 class GroupMotionUiTest {
     @get:Rule val compose = createComposeRule()
 
+    /** The settling motion continues from the frame of the hand-off instead of holding the stone above the floor. */
+    @Test fun stoneLandingIsHeardOnTheNextFrame() {
+        assertFalse(com.example.ballsortgame.ui.PlayOptions.waterBeads)
+        val before = Board(listOf(Tube(4, listOf(2)), Tube(4)))
+        val move = Move(0, 1)
+        val result = requireNotNull(PuzzleRules.transfer(before, move))
+        val group = MovingGroup(0L, before, move, result.count)
+        var state by mutableStateOf(GameUiState(loading = false, board = result.board,
+            transfer = group, transfers = listOf(group)))
+        var frame = 0
+        var landed = -1
+        var heard = -1
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.setContent {
+                PuzzleBoard(state, {}, { state = state.copy(transfer = null, transfers = emptyList()) },
+                    Modifier.fillMaxSize(), onImpact = { if (landed < 0) landed = frame },
+                    onContact = { if (heard < 0) heard = frame })
+            }
+            while (heard < 0 && frame < 240) { compose.mainClock.advanceTimeByFrame(); frame++ }
+            assertTrue("landed $landed, first contact $heard", landed >= 0 && heard - landed in 0..1)
+            compose.mainClock.advanceTimeBy(4000)
+            compose.runOnIdle { assertTrue(state.transfers.isEmpty()) }
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
     @Test fun threeBeadTransferMakesDistinctContactsAndFinishes() {
         val base = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
         val prefix = "bead-motion-test-${System.nanoTime()}-"

@@ -198,6 +198,38 @@ class SettlingColumnsTest {
         assertTrue(columns.drainContacts().isEmpty())
     }
 
+    /** The landing's pulse runs down through beads that already touch; only the new meeting is heard. */
+    @Test fun aBeadLandingOnAStackIsOneTapNotAnEcho() {
+        fun firstContacts(columns: SettlingColumns): List<com.example.ballsortgame.ui.StoneContact> {
+            columns.land(0, 1, columns.topOffset(0), slot * 20f)
+            val heard = mutableListOf<com.example.ballsortgame.ui.StoneContact>()
+            // The first 0.15 s: the landing itself, before the bead can rebound and come down again.
+            repeat(75) { columns.step(0.002f); heard += columns.drainContacts() }
+            return heard
+        }
+        // A stack placed at rest (level start, undo), and one that came to rest under its own weight.
+        val placed = SettlingColumns(1, slot).apply { waterBeads = true; sync(0, 2) }
+        val settled = SettlingColumns(1, slot).apply { waterBeads = true }
+        settled.land(0, 2, 0f, slot * 15f)
+        repeat(600) { settled.step(frame) }
+        assertFalse(settled.awake)
+        settled.drainContacts()
+        for (columns in listOf(placed, settled)) {
+            val heard = firstContacts(columns)
+            assertEquals(heard.toString(), 1, heard.size)
+            assertEquals(com.example.ballsortgame.ui.ContactKind.STONE, heard.single().kind)
+        }
+    }
+
+    @Test fun aDepartingBeadGroupStartsWhereItWasDrawn() {
+        val columns = SettlingColumns(1, slot).apply { waterBeads = true; sync(0, 3) }
+        val lifts = columns.departing(0, 3, 2)
+        // Top stone first, each from its own packed position.
+        assertEquals(columns.visibleOffset(0, 2), lifts[0], 0f)
+        assertEquals(columns.visibleOffset(0, 1), lifts[1], 0f)
+        assertTrue(lifts[0] < lifts[1] - slot * 0.1f)
+    }
+
     @Test fun manyRapidArrivalsStillSettle() {
         val columns = SettlingColumns(1, slot) { _, index -> slot * (6 - index) }
         repeat(5) { n ->

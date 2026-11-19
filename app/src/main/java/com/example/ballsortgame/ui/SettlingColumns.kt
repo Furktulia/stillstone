@@ -31,6 +31,7 @@ internal class SettlingColumns(
             field = value
             for (column in columns) {
                 column.beadQuietTime = 0f
+                for (i in column.touching.indices) column.touching[i] = true
                 for (i in column.offset.indices) {
                     val packing = i * slot * (1f - BEAD_DIAMETER)
                     column.offset[i] = if (!column.awake) {
@@ -44,6 +45,12 @@ internal class SettlingColumns(
         val offset = ArrayList<Float>()
         val velocity = ArrayList<Float>()
         val resting = ArrayList<Boolean>()
+        /**
+         * Whether bead i is pressed against what is below it (the glass or bead i - 1). A tap is
+         * heard only when a separated pair meets: a pulse passing through beads that already
+         * touch made a second, quieter copy of every landing on a stack.
+         */
+        val touching = ArrayList<Boolean>()
         var awake = false
     }
 
@@ -83,11 +90,12 @@ internal class SettlingColumns(
 
     // A floor contact deforms the bead alone. At a bead-to-bead contact the
     // two beads share the compression, so their visible surfaces meet.
-    private fun overlap(column: Column, i: Int): Float = when {
-        i == 0 -> (-column.offset[0]).coerceAtLeast(0f)
-        i < column.offset.size -> (column.offset[i - 1] - column.offset[i] + 2 * beadRadius - slot)
-            .coerceAtLeast(0f)
-        else -> 0f
+    private fun overlap(column: Column, i: Int): Float = penetration(column, i).coerceAtLeast(0f)
+    /** Signed: how far bead i presses into what is below it, negative while there is a gap. */
+    private fun penetration(column: Column, i: Int): Float = when {
+        i == 0 -> -column.offset[0]
+        i < column.offset.size -> column.offset[i - 1] - column.offset[i] + 2 * beadRadius - slot
+        else -> Float.NEGATIVE_INFINITY
     }
     private fun bottomTrim(column: Column, i: Int) = overlap(column, i) * if (i == 0) 1f else 0.5f
     private fun topTrim(column: Column, i: Int) = overlap(column, i + 1) * 0.5f
@@ -103,6 +111,13 @@ internal class SettlingColumns(
         val offset = offset(tube, index)
         return if (waterBeads) offset + (bottomTrim(column, index) - topTrim(column, index)) / 2 else offset
     }
+
+    /**
+     * Where each stone of a group leaving the top of [tube] is drawn now, relative to its slot,
+     * top stone first (the order of GroupRoute). Beads rest packed closer than a slot apart, so
+     * every stone needs its own value or the group springs apart in the first frame of flight.
+     */
+    fun departing(tube: Int, size: Int, count: Int) = FloatArray(count) { visibleOffset(tube, size - 1 - it) }
 
     private fun support(tube: Int, i: Int): Float = if (i == 0) 0f else columns[tube].offset[i - 1]
 
@@ -126,11 +141,15 @@ internal class SettlingColumns(
                 column.offset.removeAt(column.offset.lastIndex)
                 column.velocity.removeAt(column.velocity.lastIndex)
                 column.resting.removeAt(column.resting.lastIndex)
+                column.touching.removeAt(column.touching.lastIndex)
             }
         } else {
             column.beadQuietTime = 0f
-            column.offset.clear(); column.velocity.clear(); column.resting.clear()
-            repeat(count) { i -> column.offset.add(if (waterBeads) i * slot * (BEAD_DIAMETER - 1f) else 0f); column.velocity.add(0f); column.resting.add(true) }
+            column.offset.clear(); column.velocity.clear(); column.resting.clear(); column.touching.clear()
+            repeat(count) { i ->
+                column.offset.add(if (waterBeads) i * slot * (BEAD_DIAMETER - 1f) else 0f)
+                column.velocity.add(0f); column.resting.add(true); column.touching.add(true)
+            }
             column.awake = false
         }
     }
@@ -141,7 +160,7 @@ internal class SettlingColumns(
         val start = maxOf(height, topOffset(tube), if (waterBeads) Float.NEGATIVE_INFINITY else 0f)
         column.beadQuietTime = 0f
         repeat(count) {
-            column.offset.add(start); column.velocity.add(-abs(speed)); column.resting.add(false)
+            column.offset.add(start); column.velocity.add(-abs(speed)); column.resting.add(false); column.touching.add(false)
         }
         column.awake = true
     }
@@ -231,9 +250,12 @@ internal class SettlingColumns(
         var lowerImpulse = 0f
         for (i in 0 until n) {
             val closing = if (i == 0) -v[i] else v[i - 1] - v[i]
-            val depth = overlap(column, i)
-            val newContact = depth > 0f && depth <= closing * dt
-            if (newContact) report(if (i == 0) ContactKind.FLOOR else ContactKind.STONE, tube, closing, time)
+            val signed = penetration(column, i)
+            val depth = signed.coerceAtLeast(0f)
+            if (depth > 0f) {
+                if (!column.touching[i]) report(if (i == 0) ContactKind.FLOOR else ContactKind.STONE, tube, closing, time)
+                column.touching[i] = true
+            } else if (signed < -SEPARATED * slot) column.touching[i] = false
             val upperImpulse = if (depth > 0f) {
                 val stiffness = if (i == 0) 16000f else 11000f
                 val damping = if (i == 0) 64f else 104f
@@ -290,6 +312,8 @@ internal class SettlingColumns(
         const val STONE_RESTITUTION = 0.92f
         /** Slowest closing speed, in slots per second, that counts as a contact worth reporting. */
         const val MIN_CONTACT_SLOTS = 2.5f
+        /** Gap, in slots, that counts as a bead lifting off: far below what can be seen. */
+        private const val SEPARATED = 0.01f
         private const val SUBSTEP = 0.002f
         private const val MAX_FRAME = 0.05f
 
