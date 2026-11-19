@@ -16,10 +16,20 @@ internal object PlayOptions {
     var hiddenColors by mutableStateOf(false)
         private set
 
+    var waterBeads by mutableStateOf(false)
+        private set
+
+    fun waterBeads(context: Context, enabled: Boolean) {
+        waterBeads = enabled
+        context.getSharedPreferences("mode", Context.MODE_PRIVATE).edit().putBoolean("waterBeads", enabled).apply()
+    }
+
     fun load(context: Context) {
         if (loaded) return
         loaded = true
-        hiddenColors = context.getSharedPreferences("mode", Context.MODE_PRIVATE).getBoolean("hidden", false)
+        val preferences = context.getSharedPreferences("mode", Context.MODE_PRIVATE)
+        waterBeads = preferences.getBoolean("waterBeads", false)
+        hiddenColors = preferences.getBoolean("hidden", false)
     }
 
     fun hiddenColors(context: Context, value: Boolean) {

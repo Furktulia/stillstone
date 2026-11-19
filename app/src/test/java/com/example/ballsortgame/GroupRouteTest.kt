@@ -111,10 +111,10 @@ class GroupRouteTest {
         assertFalse(entersClaimedSpace(away, nearEnd, route.claimed(0f, slot), slot))
     }
 
-    @Test fun descentIncludesAisleHeightAcrossHorizontalTurnsAndBounceCanClearOwnRim() {
+    @Test fun fallStartsAfterLastHorizontalTurnAndBounceCanClearOwnRim() {
         val path = StoneRoute(listOf(FlightPoint(0f, 200f), FlightPoint(0f, 0f),
             FlightPoint(100f, 0f), FlightPoint(100f, 100f), FlightPoint(200f, 100f), FlightPoint(200f, 300f)), 0f)
-        assertEquals(300f, path.fallHeight, 0.01f)
+        assertEquals(200f, GroupRoute(path, 2, 40f).fallHeight, 0.01f)
         val layout = boardGeometry(List(6) { 4 }, 360f, 530f, 1f)
         val top = layout[1].pieceY(3, 1f)
         val clearance = reboundClearance(layout, 1, 3, 1f)

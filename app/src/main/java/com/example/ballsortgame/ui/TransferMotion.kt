@@ -78,18 +78,10 @@ internal class StoneRoute(points: List<FlightPoint>, rounding: Float) {
     }
     private val lengths = samples.zipWithNext { a, b -> a.distance(b) }
     val length = lengths.sum()
-    // Horizontal travel does not erase descent already gained down an aisle.
-    // Only a fresh climb resets the potential drop.
-    private val fallStartIndex: Int = run {
-        var index = samples.lastIndex
-        while (index > 0 && samples[index - 1].y <= samples[index].y + 0.01f) index--
-        while (index < samples.lastIndex && kotlin.math.abs(samples[index + 1].y - samples[index].y) < 0.01f) index++
-        index
-    }
-    val fallHeight = (samples.last().y - samples[fallStartIndex].y).coerceAtLeast(0f)
-    // Finish the rounded alignment corner before accelerating down the final shaft.
-    // Energy still uses the full continuous descent above, not just this last segment.
-    private val alignedIndex = (samples.indexOfLast { abs(it.x - samples.last().x) > 0.01f } + 1).coerceAtMost(samples.lastIndex)
+    // Finish aligning with the tube before releasing the group into free fall.
+    private val alignedIndex = samples.indices.lastOrNull { i ->
+        i > 0 && (abs(samples[i - 1].x - samples.last().x) > 0.01f || samples[i].y < samples[i - 1].y)
+    } ?: 0
     val releaseFraction = if (length > 0) lengths.take(alignedIndex).sum() / length else 0f
     fun at(fraction: Float): FlightPoint {
         var remaining = fraction.coerceIn(0f, 1f) * length

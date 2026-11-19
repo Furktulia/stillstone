@@ -4,6 +4,8 @@ Last consolidated: 2026-11-10. This document is the starting context for continu
 the game with its creator. It describes the latest session's state, not a claim
 that the app is complete. Inspect current source and new user feedback before acting.
 
+For the latest material, motion and sound review, see [Water beads and impact audio](beads-and-impact-audio.md).
+
 ## 1. Who you are working with
 
 The creator is a CS student who programs but started without Android experience.

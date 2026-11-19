@@ -26,8 +26,14 @@ class SoundComparisonTest {
                 player.prepare(style) // Gameplay bank, not just the comparison clip.
                 assertTrue("Gameplay bank failed: $style", player.ready)
                 for (count in 1..6) { player.impact(0, style, 0f, count); player.stop() }
-                for (kind in ContactKind.entries) repeat(5) { player.contact(kind, style, 0f, 1.03f); player.stop() }
+                for (kind in ContactKind.entries) repeat(5) { player.stoneContact(kind, style, 0.01f, 1.03f); player.stop() }
             }
+            player.prepare(ImpactStyle.RIVER, beads = true)
+            assertTrue("Bead contact bank failed", player.ready)
+            for (kind in ContactKind.entries) repeat(5) { player.beadContact(kind, ImpactStyle.RIVER, 0.01f) }
+            player.prepare(ImpactStyle.RIVER)
+            assertTrue("Stone bank failed after switching back from beads", player.ready)
+            for (kind in ContactKind.entries) player.stoneContact(kind, ImpactStyle.RIVER, 0.01f, 1f)
         } finally { player.release() }
         val base = InstrumentationRegistry.getInstrumentation().targetContext
         val prefix = "sound-test-${System.nanoTime()}-"

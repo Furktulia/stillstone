@@ -85,6 +85,26 @@ internal object ImpactSounds {
         return ShortArray(length) { (signal[it] / peak * level * 32767).roundToInt().toShort() }
     }
 
+    fun beadContact(kind: ContactKind, variant: Int): ShortArray {
+        val beadOnBead = kind == ContactKind.STONE
+        val pitchScale = 0.97 + 0.025 * variant
+        val bodyHz = (if (beadOnBead) 790 else 920) * pitchScale
+        val glassHz = (if (kind == ContactKind.OVERHEAD) 2100 else 1560) * pitchScale
+        val length = rate * 6 / 100
+        return ShortArray(length) { frame ->
+            val t = frame.toDouble() / rate
+            val phase = 2 * PI * bodyHz * t
+            // Two quickly damped modes give the gel a soft contact transient without a pitch glide.
+            val body = 0.62 * sin(phase) * exp(-t * 245) +
+                0.38 * sin(phase * 1.47) * exp(-t * 330)
+            val glass = if (beadOnBead) 0.0 else
+                0.40 * sin(2 * PI * glassHz * t) * exp(-t * 105)
+            val attack = min(1.0, t / if (beadOnBead) 0.0018 else 0.001)
+            val fade = min(1.0, (length - 1 - frame) / (0.005 * rate))
+            ((body + glass) * attack * fade * (if (beadOnBead) 14200 else 18400)).roundToInt().toShort()
+        }
+    }
+
     /** Single-hit RMS over the clip. Was 0.052, which peaked near half scale and read as faint. */
     private const val LEVEL = 0.095
     private const val CEILING = 0.88

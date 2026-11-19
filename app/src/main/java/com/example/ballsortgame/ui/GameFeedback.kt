@@ -6,7 +6,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Process
-import android.os.SystemClock
 import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -34,13 +33,22 @@ private object FeedbackThread {
 /** Small locally synthesized stone taps. No downloads, music, or audio service. */
 internal class StoneAudio {
     private val tracks = mutableListOf<AudioTrack>()
+    private class ContactVoice(val track: AudioTrack, val peaks: StoneClipPeaks) {
+        var gain = 0f
+        fun remainingPeak(): Float = if (gain == 0f) 0f else
+            gain * peaks.fromFrame(track.playbackHeadPosition)
+    }
+
+    private val stoneVoices = mutableListOf<ContactVoice>()
+    private val contactCursor = IntArray(ContactKind.entries.size)
     private var next = 0
     private var closed = false
-    private var loadedStyle: ImpactStyle? = null
+    @Volatile private var loadedStyle: ImpactStyle? = null
+    private var preparedBeads = false
     private var previewPrepared = false
-    private val contactCursor = IntArray(ContactKind.entries.size)
+    @Volatile private var contacts: ContactPlayer? = null
     val ready: Boolean @Synchronized get() = tracks.isNotEmpty()
-    private fun load(pcm: ShortArray) {
+    private fun load(pcm: ShortArray): AudioTrack {
         val track = AudioTrack.Builder()
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
@@ -49,21 +57,30 @@ internal class StoneAudio {
             .setTransferMode(AudioTrack.MODE_STATIC).setBufferSizeInBytes(pcm.size * 2).build()
         tracks.add(track)
         check(track.write(pcm, 0, pcm.size) == pcm.size)
+        return track
     }
-    @Synchronized fun prepare(style: ImpactStyle, deep: Boolean = true, balls: Int = 1, preview: Boolean = false) {
+    @Synchronized fun prepare(style: ImpactStyle, deep: Boolean = true, balls: Int = 1, preview: Boolean = false, beads: Boolean = false) {
         if (closed) return
-        if (!preview && !previewPrepared && loadedStyle == style && tracks.isNotEmpty()) return
+        if (!preview && !previewPrepared && preparedBeads == beads && loadedStyle == style && tracks.isNotEmpty()) return
         tracks.forEach { it.release() }; tracks.clear()
+        stoneVoices.clear()
+        contacts?.close()
+        contacts = null
         loadedStyle = style
+        preparedBeads = beads
         previewPrepared = preview
         try {
             // Whole-landing clips: used when stones move instantly, and by the sound comparison.
             repeat(if (preview) 1 else GROUP_CLIPS) { voice ->
                 load(ImpactSounds.render(style, if (preview) deep else true, if (preview) balls else voice / 2 + 1, voice % 2))
             }
-            // One short voice per real contact, a few per kind so quick knocks can overlap.
-            if (!preview) for (kind in ContactKind.entries) repeat(CONTACT_VOICES) { voice ->
-                load(ImpactSounds.renderContact(style, kind, voice % 3))
+            if (!preview && beads) {
+                contacts = ContactPlayer(ContactKind.entries.associateWith { ImpactSounds.beadContact(it, 1) })
+            } else if (!preview) {
+                for (kind in ContactKind.entries) repeat(CONTACT_VOICES) { voice ->
+                    val pcm = ImpactSounds.renderContact(style, kind, voice % 3)
+                    stoneVoices.add(ContactVoice(load(pcm), StoneClipPeaks(pcm)))
+                }
             }
         } catch (_: Exception) { release() } // Feedback must never prevent play.
     }
@@ -77,24 +94,62 @@ internal class StoneAudio {
             track.play()
         } catch (_: IllegalStateException) { }
     }
-    /** [pitch] is a playback-rate factor near 1, so repeated knocks are not identical. */
-    @Synchronized fun contact(kind: ContactKind, style: ImpactStyle, volume: Float, pitch: Float) {
-        if (previewPrepared || loadedStyle != style || tracks.size < GROUP_CLIPS + ContactKind.entries.size * CONTACT_VOICES) return
+    fun motion(active: Boolean) { contacts?.motion(active) }
+    fun beadContact(kind: ContactKind, style: ImpactStyle, volume: Float, delaySeconds: Float = 0f) {
+        if (loadedStyle == style) contacts?.hit(kind, volume, delaySeconds)
+    }
+    @Synchronized fun stoneContact(kind: ContactKind, style: ImpactStyle, volume: Float, pitch: Float) {
+        if (loadedStyle != style || stoneVoices.isEmpty()) return
         try {
-            val track = tracks[GROUP_CLIPS + kind.ordinal * CONTACT_VOICES + contactCursor[kind.ordinal]++ % CONTACT_VOICES]
-            track.stop()
-            track.reloadStaticData()
-            track.setVolume(volume.coerceIn(0f, 1f))
-            track.playbackRate = (ImpactSounds.rate * pitch).toInt()
-            track.play()
+            val index = contactCursor[kind.ordinal]++ % CONTACT_VOICES
+            val voice = stoneVoices[kind.ordinal * CONTACT_VOICES + index]
+            voice.track.stop()
+            voice.gain = 0f
+            var overlappingPeak = 0f
+            for (other in stoneVoices) overlappingPeak += other.remainingPeak()
+            val gain = voice.peaks.gainFor(volume, overlappingPeak)
+            if (voice.track.reloadStaticData() != AudioTrack.SUCCESS) return
+            voice.track.setVolume(gain)
+            voice.track.playbackRate = (ImpactSounds.rate * pitch).toInt()
+            voice.track.play()
+            voice.gain = gain
         } catch (_: IllegalStateException) { }
     }
-    @Synchronized fun stop() { tracks.forEach { runCatching { it.stop() } } }
-    @Synchronized fun release() { closed = true; tracks.forEach { it.release() }; tracks.clear() }
+    @Synchronized fun stop() {
+        contacts?.stop()
+        tracks.forEach { runCatching { it.stop() } }
+        stoneVoices.forEach { it.gain = 0f }
+    }
+    @Synchronized fun release() {
+        closed = true
+        contacts?.close()
+        contacts = null
+        tracks.forEach { it.release() }
+        tracks.clear()
+        stoneVoices.clear()
+    }
 
     private companion object {
-        const val GROUP_CLIPS = 8
         const val CONTACT_VOICES = 4
+        const val GROUP_CLIPS = 8
+    }
+}
+
+/** Upper bound on a static clip's remaining signal, in full-scale PCM units. */
+internal class StoneClipPeaks(pcm: ShortArray) {
+    private val peaks = FloatArray(pcm.size + 1).apply {
+        for (i in pcm.lastIndex downTo 0) {
+            this[i] = maxOf(this[i + 1], kotlin.math.abs(pcm[i].toInt()) / 32768f)
+        }
+    }
+
+    fun fromFrame(frame: Int): Float = peaks[frame.coerceIn(0, peaks.lastIndex)]
+
+    fun gainFor(requested: Float, overlappingPeak: Float): Float {
+        val gain = requested.coerceIn(0f, 1f)
+        // Leave headroom at the system mixer when independently played clips can add up.
+        val available = (0.98f - overlappingPeak).coerceAtLeast(0f)
+        return if (peaks[0] * gain <= available) gain else available / peaks[0]
     }
 }
 
@@ -154,7 +209,7 @@ internal class GameFeedback(
 }
 
 @Composable
-internal fun rememberGameFeedback(): GameFeedback {
+internal fun rememberGameFeedback(moving: Boolean = false): GameFeedback {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val audio = remember { StoneAudio() }
@@ -171,28 +226,50 @@ internal fun rememberGameFeedback(): GameFeedback {
                 if (haptic) FeedbackThread.post { haptics.tap((0.25f + 0.07f * sqrt(event.dropSlots.coerceAtLeast(0f))).coerceAtMost(0.55f)) }
             }
         }, contactAction = { contact, style ->
-            val now = SystemClock.uptimeMillis()
-            // A group's stones knock together within a few milliseconds; one voice per kind
-            // is enough for that instant, and later bounces are heard separately.
-            if (audible() && now - lastContact[contact.kind.ordinal] >= CONTACT_GAP_MS) {
-                lastContact[contact.kind.ordinal] = now
-                val volume = contactVolume(contact); val pitch = 0.96f + random.nextFloat() * 0.08f
-                FeedbackThread.post { audio.contact(contact.kind, style, volume, pitch) }
+            if (audible()) {
+                val volume = contactVolume(contact)
+                if (PlayOptions.waterBeads) {
+                    val gain = if (contact.kind == ContactKind.STONE) volume * 0.68f else volume
+                    audio.beadContact(contact.kind, style, gain, contact.delaySeconds)
+                }
+                else {
+                    val now = android.os.SystemClock.uptimeMillis()
+                    if (now - lastContact[contact.kind.ordinal] >= 35L) {
+                        lastContact[contact.kind.ordinal] = now
+                        val pitch = 0.96f + random.nextFloat() * 0.08f
+                        FeedbackThread.post { audio.stoneContact(contact.kind, style, volume, pitch) }
+                    }
+                }
             }
         }, tapAction = { strength -> FeedbackThread.post { haptics.tap(strength) } })
     }
-    LaunchedEffect(audio, feedback.style) { val style = feedback.style; withContext(Dispatchers.IO) { audio.prepare(style) } }
+    val beads = PlayOptions.waterBeads
+    val warm by rememberUpdatedState(moving && feedback.sound)
+    SideEffect { audio.motion(warm && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    LaunchedEffect(audio, feedback.style, beads) {
+        val style = feedback.style
+        withContext(Dispatchers.IO) { audio.prepare(style, beads = beads) }
+        audio.motion(warm && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
     DisposableEffect(audio, lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_PAUSE) FeedbackThread.post { audio.stop() } }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) audio.motion(warm)
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                FeedbackThread.post { audio.stop() }
+            }
+        }
         lifecycle.addObserver(observer)
         // After any sounds still waiting to start, so none starts on a released track.
-        onDispose { lifecycle.removeObserver(observer); FeedbackThread.post { audio.release() } }
+        onDispose {
+            lifecycle.removeObserver(observer)
+            FeedbackThread.post { audio.release() }
+        }
     }
-    LaunchedEffect(feedback.sound) { if (!feedback.sound) FeedbackThread.post { audio.stop() } }
+    LaunchedEffect(feedback.sound, feedback.style, beads) {
+        if (!feedback.sound) FeedbackThread.post { audio.stop() }
+    }
     return feedback
 }
-
-private const val CONTACT_GAP_MS = 35L
 
 /** Faster knocks are louder, on a curve that keeps small settling taps audible but soft. */
 internal fun contactVolume(contact: StoneContact): Float {

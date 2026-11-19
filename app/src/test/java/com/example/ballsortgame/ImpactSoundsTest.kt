@@ -22,6 +22,24 @@ class ImpactSoundsTest {
         assertTrue(soft in 0.05f..0.5f && hard > soft * 1.8f && hard <= 1f)
     }
 
+    @Test fun riverStoneContactsCanClipWhenTheirPeaksOverlap() {
+        val floor = ImpactSounds.renderContact(ImpactStyle.RIVER, ContactKind.FLOOR)
+        val stone = ImpactSounds.renderContact(ImpactStyle.RIVER, ContactKind.STONE)
+        val floorPeak = floor.indices.maxBy { floor[it] }
+        val stonePeak = stone.indices.maxBy { stone[it] }
+        val volume = 0.85f
+        val unbounded = floor[floorPeak] + stone[stonePeak] * volume
+        assertTrue("The original overlapping mix exceeds full scale", unbounded > Short.MAX_VALUE)
+
+        val floorPeaks = StoneClipPeaks(floor)
+        val stonePeaks = StoneClipPeaks(stone)
+        val gain = stonePeaks.gainFor(volume, floorPeaks.fromFrame((floorPeak - stonePeak).coerceAtLeast(0)))
+        assertTrue("The second hit stays audible", gain > 0f)
+        assertTrue(floor[floorPeak] + stone[stonePeak] * gain <= Short.MAX_VALUE)
+        assertEquals(volume, stonePeaks.gainFor(volume, floorPeaks.fromFrame(floor.size)), 0f)
+        assertEquals(volume, stonePeaks.gainFor(volume, 0.02f), 0f)
+    }
+
     @Test fun stylesAreDistinctRepeatableBoundedAndComparableInEnergy() {
         val clips = ImpactStyle.entries.map { ImpactSounds.render(it, variant = 1) }
         assertFalse(clips[0].contentEquals(clips[1]))

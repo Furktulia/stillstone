@@ -20,12 +20,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
-internal data class WorldLook(val art: String, val base: Color, val accent: Color, val light: Color, val tube: Color)
+internal data class WorldLook(val art: String, val base: Color, val accent: Color, val light: Color, val tube: Color, val beadReflection: Float)
 internal fun worldLook(id: String) = when (id) {
-    "four" -> WorldLook("moonlight", Color(0xFF09151C), Color(0xFFA6CFD1), Color(0xFFD0E8EC), Color(0xFF5F7781))
-    "endless" -> WorldLook("midnight", Color(0xFF0D0E24), Color(0xFFC4B5F2), Color(0xFFE2DAFF), Color(0xFF6B678F))
-    "five" -> WorldLook("midnight", Color(0xFF0B1024), Color(0xFFAEBEE8), Color(0xFFD4DEFF), Color(0xFF626F90))
-    else -> WorldLook("dusk", Color(0xFF160D20), Color(0xFFC8AFE3), Color(0xFFE8D4F2), Color(0xFF796784))
+    "four" -> WorldLook("moonlight", Color(0xFF09151C), Color(0xFFA6CFD1), Color(0xFFD0E8EC), Color(0xFF5F7781), beadReflection = 0.1f)
+    "endless" -> WorldLook("midnight", Color(0xFF0D0E24), Color(0xFFC4B5F2), Color(0xFFE2DAFF), Color(0xFF6B678F), beadReflection = 0.055f)
+    "five" -> WorldLook("midnight", Color(0xFF0B1024), Color(0xFFAEBEE8), Color(0xFFD4DEFF), Color(0xFF626F90), beadReflection = 0.055f)
+    else -> WorldLook("dusk", Color(0xFF160D20), Color(0xFFC8AFE3), Color(0xFFE8D4F2), Color(0xFF796784), beadReflection = 0.16f)
 }
 internal val LocalWorldLook = staticCompositionLocalOf { worldLook("three") }
 

@@ -1,5 +1,7 @@
 package com.example.ballsortgame.ui
 
+import androidx.compose.ui.graphics.drawscope.translate
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
@@ -44,8 +46,14 @@ internal fun PatternTarget(board: Board, labels: Boolean, current: Board? = null
                     tube.balls.forEachIndexed { place, color ->
                         val d = slot * .82f
                         val center = Offset(size.width / 2, bottom - 4.dp.toPx() - (place + .5f) * slot)
-                        drawRoundRect(PieceColors[color % PieceColors.size], Offset(center.x - d / 2, center.y - d / 2),
-                            androidx.compose.ui.geometry.Size(d, d), androidx.compose.ui.geometry.CornerRadius(d * .46f))
+                        if (PlayOptions.waterBeads) {
+                            translate(center.x - d / 2, center.y - d / 2) {
+                                drawWaterBead(center, d, PieceColors[color % PieceColors.size], look, 0f)
+                            }
+                        } else {
+                            drawRoundRect(PieceColors[color % PieceColors.size], Offset(center.x - d / 2, center.y - d / 2),
+                                androidx.compose.ui.geometry.Size(d, d), androidx.compose.ui.geometry.CornerRadius(d * .46f))
+                        }
                         if (labels) {
                             val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                                 textAlign = android.graphics.Paint.Align.CENTER; textSize = d * .62f

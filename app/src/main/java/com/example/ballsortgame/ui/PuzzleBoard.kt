@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
@@ -115,6 +116,8 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
         val settling = remember(layout) {
             SettlingColumns(layout.size, layout.first().slot) { tube, slot -> reboundClearance(layout, tube, slot, density) }
         }
+        val beads = PlayOptions.waterBeads
+        SideEffect { settling.waterBeads = beads }
         // Where every stone still in flight is drawn right now.
         val hovering by rememberUpdatedState {
             buildList {
@@ -131,12 +134,13 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
         // finished and a group landed in the same frame, the flag went false then true again, the
         // effect saw no change and never restarted, and the board froze mid-bounce for good.
         var settleRequests by remember(settling) { mutableIntStateOf(0) }
+        var beadHandoffTime by remember(settling) { mutableLongStateOf(0L) }
         var settledEpoch by remember { mutableIntStateOf(0) }
         val stationary = stationaryPieces(frames, state.board)
         stationary.forEachIndexed { tube, stones -> settling.sync(tube, stones.size) }
         LaunchedEffect(settling, settleRequests) {
             if (settleRequests == 0) return@LaunchedEffect
-            var last = withFrameNanos { it }
+            var last = if (beadHandoffTime != 0L) beadHandoffTime else withFrameNanos { it }
             while (settling.awake) {
                 val now = withFrameNanos { it }
                 val moving = settling.awakeCount
@@ -149,9 +153,14 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                         // Stones lifting out of this very tube are leaving, not blocking it.
                         if (source == tube) continue
                         val dx = kotlin.math.abs(stone.x - geometry.centerX)
-                        if (dx >= geometry.slot * 0.95f) continue
-                        val reach = kotlin.math.sqrt(geometry.slot * geometry.slot - dx * dx)
-                        lid = minOf(lid, geometry.pieceY(top, density) - stone.y - reach)
+                        val flatten = if (beads) settling.squash(tube, top) else 0f
+                        val diameter = geometry.slot * if (beads) SettlingColumns.BEAD_DIAMETER else 1f
+                        val horizontal = diameter * 0.5f * (1f + 1f / kotlin.math.sqrt(1f - flatten))
+                        if (dx >= horizontal * 0.95f) continue
+                        val reach = diameter * (1f - flatten * 0.5f) *
+                            kotlin.math.sqrt(1f - dx * dx / (horizontal * horizontal))
+                        lid = minOf(lid, geometry.pieceY(top, density) - stone.y - reach -
+                            (settling.visibleOffset(tube, top) - settling.offset(tube, top)))
                     }
                     settling.lid(tube, lid)
                 }
@@ -179,7 +188,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                             val slot = layout.first().slot
                             val longest = route.length / slot
                             val approachMs = (580 + longest * releaseFractions[index] * 12).toInt().coerceIn(600, 900)
-                            val fallMs = (135 * kotlin.math.sqrt(drops[index] / slot)).toInt().coerceIn(120, 520)
+                            val fallMs = LandingMotion.fallMillis(route.fallHeight, slot)
                             // The approach is stepped by hand, on real frame time, for two reasons.
                             // Stone travel is part of play, so it must not follow Android's
                             // "remove animations" scale. And the group has to be able to hold its
@@ -253,9 +262,13 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                                 if (progress >= LandingMotion.contact ||
                                     height - falling <= settling.topOffset(destination) + rising) break
                             }
-                            val rebound = LandingMotion.reboundHeight(drops[index], slot, group.count)
-                            settling.land(destination, group.count, height, SettlingColumns.impactSpeed(rebound, slot))
-                            settleRequests++
+                            val speed = LandingMotion.fallSpeed(route.fallHeight - height, slot)
+                            val needsClock = !beads || !settling.awake
+                            settling.land(destination, group.count, height, speed)
+                            if (needsClock) {
+                                beadHandoffTime = if (beads) last else 0L
+                                settleRequests++
+                            }
                             flight.landed = true
                             impactCallback(LandingImpact(group.count, drops[index] / slot))
                         } else flight.landed = true
@@ -319,10 +332,11 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                     // Lifting an unseen stone with the selection would give its colour away.
                     val lifted = groups.isEmpty() && state.selected == index &&
                         pieceIndex >= maxOf(tube.balls.size - (if (rules.singleStone) 1 else tube.topRun), unseen(index))
-                    val bounce = settling.offset(index, pieceIndex)
+                    val bounce = settling.visibleOffset(index, pieceIndex)
                     drawStone(
                         Offset(geometry.centerX, geometry.pieceY(pieceIndex, density) - bounce - if (lifted) 7f * density * selectionLift.floatValue else 0f),
-                        geometry.slot, color, state.colorLabels, numberPaint, look.light,
+                        geometry.slot, color, state.colorLabels, numberPaint, look,
+                        squash = settling.squash(index, pieceIndex),
                         veil = if (pieceIndex < unseen(index)) lerp(look.base, look.tube, 0.55f) else null,
                     )
                 }
@@ -357,7 +371,7 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
                     val t = LandingMotion.distance(progress, releaseFractions[index])
                     val lift = flights[index].lift * (1 - (progress / (LandingMotion.release * 0.4f)).coerceIn(0f, 1f))
                     routes[index]?.at(t)?.forEach { point ->
-                        drawStone(Offset(point.x, point.y - lift), layout[group.move.source].slot, color, state.colorLabels, numberPaint, look.light)
+                        drawStone(Offset(point.x, point.y - lift), layout[group.move.source].slot, color, state.colorLabels, numberPaint, look)
                     }
                 }
             }
@@ -395,28 +409,33 @@ fun PuzzleBoard(state: GameUiState, onTap: (Int) -> Unit, onTransferFinished: (L
 }
 
 /** [veil] draws a stone whose colour the player has not seen yet: same shape, night-coloured, marked "?". */
-private fun DrawScope.drawStone(center: Offset, slot: Float, colorId: Int, labels: Boolean, paint: Paint, light: Color, veil: Color? = null) {
-    val diameter = slot * 0.86f
+private fun DrawScope.drawStone(center: Offset, slot: Float, colorId: Int, labels: Boolean, paint: Paint, look: WorldLook, veil: Color? = null, squash: Float = 0f) {
+    val light = look.light
+    val diameter = slot * SettlingColumns.BEAD_DIAMETER
     val color = veil ?: lerp(PieceColors[colorId % PieceColors.size], light, 0.045f)
     drawOval(Color.Black.copy(alpha = 0.18f), topLeft = Offset(center.x - diameter * 0.43f, center.y + diameter * 0.34f), size = Size(diameter * 0.86f, diameter * 0.2f))
     translate(center.x - diameter / 2, center.y - diameter / 2) {
-        drawRoundRect(
-            brush = Brush.linearGradient(
-                listOf(lerp(color, light, 0.18f), color, lerp(color, Color.Black, 0.32f)),
-                start = Offset.Zero, end = Offset(diameter, diameter),
-            ),
-            size = Size(diameter, diameter), cornerRadius = CornerRadius(diameter * 0.46f),
-        )
-        drawRoundRect(
-            Brush.radialGradient(listOf(light.copy(alpha = 0.12f), Color.Transparent),
-                center = Offset(diameter * 0.28f, diameter * 0.18f), radius = diameter * 0.90f),
-            topLeft = Offset.Zero,
-            size = Size(diameter, diameter), cornerRadius = CornerRadius(diameter * 0.46f))
-        repeat(4) { grain ->
-            val x = diameter * (0.26f + grain * 0.115f)
-            val y = diameter * (0.59f + ((grain + colorId) % 3) * 0.06f)
-            drawLine(light.copy(alpha = 0.045f), Offset(x, y), Offset(x + diameter * 0.045f, y - diameter * 0.012f),
-                strokeWidth = (diameter * 0.008f).coerceAtLeast(0.5f))
+        if (PlayOptions.waterBeads) {
+            drawWaterBead(center, diameter, color, look, squash)
+        } else {
+            drawRoundRect(
+                brush = Brush.linearGradient(
+                    listOf(lerp(color, light, 0.18f), color, lerp(color, Color.Black, 0.32f)),
+                    start = Offset.Zero, end = Offset(diameter, diameter),
+                ),
+                size = Size(diameter, diameter), cornerRadius = CornerRadius(diameter * 0.46f),
+            )
+            drawRoundRect(
+                Brush.radialGradient(listOf(light.copy(alpha = 0.12f), Color.Transparent),
+                    center = Offset(diameter * 0.28f, diameter * 0.18f), radius = diameter * 0.90f),
+                topLeft = Offset.Zero,
+                size = Size(diameter, diameter), cornerRadius = CornerRadius(diameter * 0.46f))
+            repeat(4) { grain ->
+                val x = diameter * (0.26f + grain * 0.115f)
+                val y = diameter * (0.59f + ((grain + colorId) % 3) * 0.06f)
+                drawLine(light.copy(alpha = 0.045f), Offset(x, y), Offset(x + diameter * 0.045f, y - diameter * 0.012f),
+                    strokeWidth = (diameter * 0.008f).coerceAtLeast(0.5f))
+            }
         }
         if (veil != null) {
             paint.textSize = diameter * 0.44f
@@ -425,7 +444,8 @@ private fun DrawScope.drawStone(center: Offset, slot: Float, colorId: Int, label
             drawContext.canvas.nativeCanvas.drawText("?", diameter / 2, baseline, paint)
         } else if (labels) {
             paint.textSize = diameter * 0.46f
-            paint.color = android.graphics.Color.rgb(29, 22, 39)
+            paint.color = if (PlayOptions.waterBeads && color.luminance() < 0.18f)
+                android.graphics.Color.WHITE else android.graphics.Color.rgb(29, 22, 39)
             paint.typeface = Typeface.DEFAULT_BOLD
             val baseline = diameter / 2 - (paint.descent() + paint.ascent()) / 2
             drawContext.canvas.nativeCanvas.drawText((colorId + 1).toString(), diameter / 2, baseline, paint)

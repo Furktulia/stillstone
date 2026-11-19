@@ -43,7 +43,8 @@ class SettlingColumnsTest {
         run(columns) { alone += columns.drainContacts() }
         assertTrue(alone.isNotEmpty() && alone.all { it.kind == com.example.ballsortgame.ui.ContactKind.FLOOR })
         // Arrival speed plus what gravity adds over the last slot of the fall.
-        assertTrue(alone.first().speedSlots in speed / slot..speed / slot * 1.3f)
+        val expectedSpeed = kotlin.math.sqrt(speed * speed + 2f * SettlingColumns.GRAVITY_SLOTS * slot * slot)
+        assertEquals(expectedSpeed / slot, alone.first().speedSlots, 0.15f)
         assertTrue(alone.zipWithNext().all { (earlier, later) -> later.speedSlots < earlier.speedSlots })
 
         columns.land(0, 2, slot, speed)
@@ -151,6 +152,50 @@ class SettlingColumnsTest {
         assertFalse(columns.awake(0))
         repeat(4) { assertEquals(0f, columns.offset(0, it), 0f) }
         assertFalse(columns.awake(1))
+    }
+
+    @Test fun threeBeadsShareTheLoadAndKeepTheirCompressedSurfacesInContact() {
+        val columns = SettlingColumns(1, slot).apply { waterBeads = true }
+        val radius = slot * SettlingColumns.BEAD_DIAMETER / 2f
+        columns.land(0, 3, 0f, slot * 21f)
+        val peak = FloatArray(3)
+        val contacts = mutableListOf<com.example.ballsortgame.ui.StoneContact>()
+        repeat(1500) { step ->
+            columns.step(0.002f)
+            contacts += columns.drainContacts()
+            val heights = FloatArray(3) { radius * (1f - columns.squash(0, it)) }
+            for (i in 0..2) {
+                val squash = columns.squash(0, i)
+                assertTrue("visible deformation stays within renderer bounds", squash in 0f..0.30f)
+                if (step < 40) peak[i] = maxOf(peak[i], squash)
+                val center = columns.visibleOffset(0, i) + i * slot
+                val lowerSurface = if (i == 0) -radius else
+                    columns.visibleOffset(0, i - 1) + (i - 1) * slot + heights[i - 1]
+                assertTrue("bead $i overlaps its support", center - heights[i] >= lowerSurface - 0.001f)
+                val overlap = if (i == 0) -columns.offset(0, i) else
+                    columns.offset(0, i - 1) - columns.offset(0, i) + 2 * radius - slot
+                if (overlap > 0.001f) assertEquals(lowerSurface, center - heights[i], 0.001f)
+            }
+        }
+        assertTrue("deformation should diminish up the stack: ${peak.toList()}",
+            peak[0] > peak[1] * 1.2f && peak[1] > peak[2] * 1.5f && peak[2] > 0.02f)
+        assertEquals(listOf("FLOOR", "STONE", "STONE"), contacts.take(3).map { it.kind.name })
+        assertFalse(columns.awake)
+    }
+
+    @Test fun beadsSettleAfterSuccessiveGroupsLandOnAnExistingStack() {
+        val columns = SettlingColumns(1, slot) { _, _ -> slot * 0.3f }.apply { waterBeads = true }
+        columns.sync(0, 2)
+        repeat(2) {
+            columns.land(0, 2, columns.topOffset(0), slot * 17f)
+            repeat(6) { columns.step(frame) }
+        }
+        repeat(240) { columns.step(frame) }
+        assertEquals(6, columns.size(0))
+        assertFalse(columns.awake)
+        columns.drainContacts()
+        repeat(30) { columns.step(frame) }
+        assertTrue(columns.drainContacts().isEmpty())
     }
 
     @Test fun manyRapidArrivalsStillSettle() {

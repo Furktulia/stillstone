@@ -24,7 +24,7 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var compareSounds by rememberSaveable { mutableStateOf(false) }
     var confirmRestart by rememberSaveable { mutableStateOf(false) }
-    val feedback = rememberGameFeedback()
+    val feedback = rememberGameFeedback(moving = state.transfers.isNotEmpty())
     val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     PlayOptions.load(appContext) // Reads the saved choice once; later calls do nothing.
     val tap: (Int) -> Unit = { index ->
@@ -32,7 +32,12 @@ fun GameContent(state: GameUiState, levels: List<PlayableLevel>, actions: GameAc
             state.rules.transfer(com.example.ballsortgame.engine.RuledPosition(state.board, state.openSeals),
                 com.example.ballsortgame.engine.Move(state.selected, index))?.let { (_, count) ->
                 val destination = state.board.tubes[index]
-                feedback.impact(LandingImpact(count, (destination.capacity - destination.balls.size).toFloat()))
+                val impact = LandingImpact(count, destination.freeSpace.toFloat())
+                if (PlayOptions.waterBeads) {
+                    feedback.landing(impact)
+                    val kind = if (destination.balls.isEmpty()) ContactKind.FLOOR else ContactKind.STONE
+                    feedback.contact(StoneContact(kind, index, LandingMotion.fallSpeed(impact.dropSlots, 1f)))
+                } else feedback.impact(impact)
             }
         }
         actions.tapTube(index)
@@ -198,12 +203,18 @@ internal fun SettingsDialog(state: GameUiState, feedback: GameFeedback, change: 
         onDismissRequest = dismiss, title = { Text("Make yourself comfortable") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                val materialContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Stone sounds", Modifier.weight(1f))
-                    NightSwitch(feedback.sound, feedback::sound, modifier = Modifier.semantics { contentDescription = "Stone sounds" })
+                    Text("Water beads", Modifier.weight(1f))
+                    NightSwitch(PlayOptions.waterBeads, { PlayOptions.waterBeads(materialContext, it) },
+                        modifier = Modifier.semantics { contentDescription = "Water beads" })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (PlayOptions.waterBeads) "Bead sounds" else "Stone sounds", Modifier.weight(1f))
+                    NightSwitch(feedback.sound, feedback::sound, modifier = Modifier.semantics { contentDescription = if (PlayOptions.waterBeads) "Bead sounds" else "Stone sounds" })
                 }
                 // Pulled left so its lettering lines up with the rows around it.
-                NightDialogAction("Sound · ${feedback.style.title} ›", Modifier.offset(x = (-14).dp), onClick = compare)
+                if (!PlayOptions.waterBeads) NightDialogAction("Sound · ${feedback.style.title} ›", Modifier.offset(x = (-14).dp), onClick = compare)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Gentle haptics", Modifier.weight(1f))
                     NightSwitch(feedback.haptics, feedback::haptics, modifier = Modifier.semantics { contentDescription = "Gentle haptics" })

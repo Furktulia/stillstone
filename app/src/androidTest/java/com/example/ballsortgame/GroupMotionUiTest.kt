@@ -15,6 +15,42 @@ import org.junit.Test
 class GroupMotionUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun threeBeadTransferMakesDistinctContactsAndFinishes() {
+        val base = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val prefix = "bead-motion-test-${System.nanoTime()}-"
+        val context = object : android.content.ContextWrapper(base) {
+            override fun getSharedPreferences(name: String, mode: Int) = base.getSharedPreferences(prefix + name, mode)
+        }
+        val previous = com.example.ballsortgame.ui.PlayOptions.waterBeads
+        val before = Board(listOf(Tube(4, listOf(3, 3, 3)), Tube(4)))
+        val move = Move(0, 1)
+        val result = requireNotNull(PuzzleRules.transfer(before, move))
+        val group = MovingGroup(0L, before, move, result.count)
+        var state by mutableStateOf(GameUiState(loading = false, board = result.board,
+            transfer = group, transfers = listOf(group)))
+        val contacts = mutableListOf<com.example.ballsortgame.ui.StoneContact>()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.setContent {
+                LaunchedEffect(Unit) { com.example.ballsortgame.ui.PlayOptions.waterBeads(context, true) }
+                PuzzleBoard(state, {}, {
+                    state = state.copy(transfer = null, transfers = emptyList())
+                }, Modifier.fillMaxSize(), onContact = { contacts.add(it) })
+            }
+            compose.mainClock.advanceTimeBy(4000)
+            compose.runOnIdle {
+                assertTrue(com.example.ballsortgame.ui.PlayOptions.waterBeads)
+                assertEquals(listOf("FLOOR", "STONE", "STONE"), contacts.take(3).map { it.kind.name })
+                assertTrue(state.transfers.isEmpty())
+                assertEquals(result.board, state.board)
+            }
+        } finally {
+            compose.mainClock.autoAdvance = true
+            compose.runOnIdle { com.example.ballsortgame.ui.PlayOptions.waterBeads(context, previous) }
+            base.deleteSharedPreferences(prefix + "mode")
+        }
+    }
+
     @Test fun independentGroupsFlyTogetherAndDependentGroupFollowsWithoutLostPieces() {
         var board = Board(listOf(Tube(4, listOf(0, 0)), Tube(4, listOf(0)),
             Tube(4, listOf(1, 1)), Tube(4, listOf(1)), Tube(4)))

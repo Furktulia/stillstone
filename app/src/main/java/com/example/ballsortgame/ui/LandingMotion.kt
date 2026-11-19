@@ -13,14 +13,9 @@ internal object LandingMotion {
         val falling = ((progress - release) / (contact - release)).coerceIn(0f, 1f)
         return releaseFraction + (1 - releaseFraction) * falling * falling
     }
-    /**
-     * Ordinary drops return about a third of their height. Long falls, such as from the
-     * upper row into a lower tube, return progressively more (up to 55%) so the stone
-     * can clear the rim and reach whatever is overhead.
-     */
-    fun reboundHeight(dropPixels: Float, slot: Float, balls: Int): Float {
-        val high = ((dropPixels / slot - 5f) / 6f).coerceIn(0f, 1f)
-        val share = 0.32f + 0.23f * high * high * (3 - 2 * high)
-        return (dropPixels * share).coerceIn(slot * 0.12f, slot * 7f) / sqrt(1f + 0.10f * (balls - 1).coerceAtLeast(0))
-    }
+    fun fallMillis(distance: Float, slot: Float): Float =
+        (1000f * sqrt(2f * distance.coerceAtLeast(0f) / (SettlingColumns.GRAVITY_SLOTS * slot))).coerceAtLeast(1f)
+
+    fun fallSpeed(distance: Float, slot: Float): Float =
+        sqrt(2f * SettlingColumns.GRAVITY_SLOTS * slot * distance.coerceAtLeast(0f))
 }

@@ -17,7 +17,7 @@ import kotlin.math.sqrt
 enum class ContactKind { FLOOR, STONE, OVERHEAD }
 
 /** One audible meeting of a stone with something. [speedSlots] is the closing speed in slots per second. */
-data class StoneContact(val kind: ContactKind, val tube: Int, val speedSlots: Float)
+data class StoneContact(val kind: ContactKind, val tube: Int, val speedSlots: Float, val delaySeconds: Float = 0f)
 
 internal class SettlingColumns(
     tubes: Int,
@@ -25,7 +25,22 @@ internal class SettlingColumns(
     /** Furthest a stone in this slot may rise before touching a tube above or the screen edge. */
     private val ceiling: (tube: Int, slot: Int) -> Float = { _, _ -> Float.POSITIVE_INFINITY },
 ) {
+    var waterBeads = false
+        set(value) {
+            if (field == value) return
+            field = value
+            for (column in columns) {
+                column.beadQuietTime = 0f
+                for (i in column.offset.indices) {
+                    val packing = i * slot * (1f - BEAD_DIAMETER)
+                    column.offset[i] = if (!column.awake) {
+                        if (value) -packing else 0f
+                    } else column.offset[i] + if (value) -packing else packing
+                }
+            }
+        }
     private class Column {
+        var beadQuietTime = 0f
         val offset = ArrayList<Float>()
         val velocity = ArrayList<Float>()
         val resting = ArrayList<Boolean>()
@@ -49,12 +64,13 @@ internal class SettlingColumns(
     /** Contacts since the last call, in the order they happened. For sound and haptics only. */
     fun drainContacts(): List<StoneContact> {
         if (contacts.isEmpty()) return emptyList()
-        return contacts.toList().also { contacts.clear() }
+        val first = contacts.minOf { it.delaySeconds }
+        return contacts.map { it.copy(delaySeconds = it.delaySeconds - first) }.also { contacts.clear() }
     }
 
-    private fun report(kind: ContactKind, tube: Int, speed: Float) {
+    private fun report(kind: ContactKind, tube: Int, speed: Float, time: Float = 0f) {
         // Stones leaning on each other touch every substep; only real knocks are worth hearing.
-        if (speed >= MIN_CONTACT_SLOTS * slot && contacts.size < 64) contacts.add(StoneContact(kind, tube, speed / slot))
+        if (speed >= MIN_CONTACT_SLOTS * slot && contacts.size < 64) contacts.add(StoneContact(kind, tube, speed / slot, time))
     }
 
     val awake get() = columns.any { it.awake }
@@ -63,7 +79,38 @@ internal class SettlingColumns(
     fun size(tube: Int) = columns[tube].offset.size
     fun offset(tube: Int, slot: Int) = columns[tube].offset.getOrElse(slot) { 0f }
     fun velocity(tube: Int, slot: Int) = columns[tube].velocity.getOrElse(slot) { 0f }
-    fun topOffset(tube: Int) = columns[tube].offset.lastOrNull() ?: 0f
+    private val beadRadius = slot * BEAD_DIAMETER * 0.5f
+
+    // A floor contact deforms the bead alone. At a bead-to-bead contact the
+    // two beads share the compression, so their visible surfaces meet.
+    private fun overlap(column: Column, i: Int): Float = when {
+        i == 0 -> (-column.offset[0]).coerceAtLeast(0f)
+        i < column.offset.size -> (column.offset[i - 1] - column.offset[i] + 2 * beadRadius - slot)
+            .coerceAtLeast(0f)
+        else -> 0f
+    }
+    private fun bottomTrim(column: Column, i: Int) = overlap(column, i) * if (i == 0) 1f else 0.5f
+    private fun topTrim(column: Column, i: Int) = overlap(column, i + 1) * 0.5f
+
+    fun squash(tube: Int, index: Int): Float {
+        if (!waterBeads) return 0f
+        val column = columns[tube]
+        return (bottomTrim(column, index) + topTrim(column, index)) / (2 * beadRadius)
+    }
+
+    fun visibleOffset(tube: Int, index: Int): Float {
+        val column = columns[tube]
+        val offset = offset(tube, index)
+        return if (waterBeads) offset + (bottomTrim(column, index) - topTrim(column, index)) / 2 else offset
+    }
+
+    private fun support(tube: Int, i: Int): Float = if (i == 0) 0f else columns[tube].offset[i - 1]
+
+    fun topOffset(tube: Int): Float {
+        val top = size(tube) - 1
+        if (top < 0) return 0f
+        return offset(tube, top) + if (waterBeads) 2 * beadRadius - slot else 0f
+    }
 
     /**
      * Match the number of standing stones. Departing stones leave from the top and the
@@ -74,14 +121,16 @@ internal class SettlingColumns(
         val column = columns[tube]
         if (count == column.offset.size) return
         if (count < column.offset.size) {
+            column.beadQuietTime = 0f
             while (column.offset.size > count) {
                 column.offset.removeAt(column.offset.lastIndex)
                 column.velocity.removeAt(column.velocity.lastIndex)
                 column.resting.removeAt(column.resting.lastIndex)
             }
         } else {
+            column.beadQuietTime = 0f
             column.offset.clear(); column.velocity.clear(); column.resting.clear()
-            repeat(count) { column.offset.add(0f); column.velocity.add(0f); column.resting.add(true) }
+            repeat(count) { i -> column.offset.add(if (waterBeads) i * slot * (BEAD_DIAMETER - 1f) else 0f); column.velocity.add(0f); column.resting.add(true) }
             column.awake = false
         }
     }
@@ -89,7 +138,8 @@ internal class SettlingColumns(
     /** A group arrives moving downward at [speed], [height] above its resting slots. */
     fun land(tube: Int, count: Int, height: Float, speed: Float) {
         val column = columns[tube]
-        val start = maxOf(height, topOffset(tube), 0f)
+        val start = maxOf(height, topOffset(tube), if (waterBeads) Float.NEGATIVE_INFINITY else 0f)
+        column.beadQuietTime = 0f
         repeat(count) {
             column.offset.add(start); column.velocity.add(-abs(speed)); column.resting.add(false)
         }
@@ -105,7 +155,7 @@ internal class SettlingColumns(
             while (remaining > 0f && column.awake) {
                 val dt = minOf(remaining, SUBSTEP)
                 remaining -= dt
-                advance(index, column, dt)
+                if (waterBeads) advanceBeads(index, column, dt, total - remaining) else advance(index, column, dt)
             }
         }
         return awake
@@ -122,12 +172,16 @@ internal class SettlingColumns(
             // Floor and stone-on-stone contacts, bottom to top.
             for (i in 0 until n) {
                 if (i == 0) {
-                    if (o[0] < 0f) {
-                        o[0] = 0f
-                        if (v[0] < 0f) { report(ContactKind.FLOOR, tube, -v[0]); v[0] = -FLOOR_RESTITUTION * v[0] }
+                    val floor = support(tube, 0)
+                    if (o[0] < floor) {
+                        o[0] = floor
+                        if (v[0] < 0f) {
+                            report(ContactKind.FLOOR, tube, -v[0])
+                            v[0] *= -FLOOR_RESTITUTION
+                        }
                     }
-                } else if (o[i] < o[i - 1]) {
-                    o[i] = o[i - 1]
+                } else if (o[i] < support(tube, i)) {
+                    o[i] = support(tube, i)
                     collide(tube, v, i - 1, i)
                 }
             }
@@ -143,20 +197,78 @@ internal class SettlingColumns(
                         v[i] = -(if (stone < fixed) STONE_RESTITUTION * 0.5f else CEILING_RESTITUTION) * v[i]
                     }
                 }
-                if (i < n - 1 && o[i] > o[i + 1]) {
-                    o[i] = o[i + 1]
+                if (i < n - 1 && support(tube, i + 1) > o[i + 1]) {
+                    o[i] -= support(tube, i + 1) - o[i + 1]
                     collide(tube, v, i, i + 1)
                 }
             }
         }
         var allResting = true
         for (i in 0 until n) {
-            val support = if (i == 0) 0f else o[i - 1]
+            val support = support(tube, i)
             val supported = i == 0 || resting[i - 1]
             resting[i] = supported && o[i] - support <= restGap && abs(v[i]) <= restSpeed
             if (resting[i]) { o[i] = support; v[i] = 0f } else allResting = false
         }
         if (allResting) column.awake = false
+    }
+
+    private fun advanceBeads(tube: Int, column: Column, dt: Float, time: Float) {
+        val o = column.offset
+        val v = column.velocity
+        val n = o.size
+        if (n == 0) {
+            column.awake = false
+            return
+        }
+
+        // Integrate the whole stack before applying any contact forces. Pairs
+        // exchange equal and opposite impulses, and the glass supports the load.
+        for (i in 0 until n) {
+            v[i] -= gravity * dt
+            o[i] += v[i] * dt
+        }
+        var lowerImpulse = 0f
+        for (i in 0 until n) {
+            val closing = if (i == 0) -v[i] else v[i - 1] - v[i]
+            val depth = overlap(column, i)
+            val newContact = depth > 0f && depth <= closing * dt
+            if (newContact) report(if (i == 0) ContactKind.FLOOR else ContactKind.STONE, tube, closing, time)
+            val upperImpulse = if (depth > 0f) {
+                val stiffness = if (i == 0) 16000f else 11000f
+                val damping = if (i == 0) 64f else 104f
+                // Progressively stiffen a deeply compressed bead to keep its shape legible.
+                val force = depth * stiffness * (1f + 6f * depth / slot) + damping * closing
+                force.coerceAtLeast(0f) * dt
+            } else 0f
+            if (i > 0) v[i - 1] += lowerImpulse - upperImpulse
+            lowerImpulse = upperImpulse
+        }
+        v[n - 1] += lowerImpulse
+
+        var quiet = true
+        for (i in n - 1 downTo 0) {
+            val fixed = ceiling(tube, i).coerceAtLeast(0f) + topTrim(column, i)
+            val lid = if (i == n - 1) lids[tube] else Float.POSITIVE_INFINITY
+            val limit = minOf(fixed, lid)
+            if (o[i] > limit) {
+                o[i] = limit
+                if (v[i] > 0f) {
+                    report(if (lid < fixed) ContactKind.STONE else ContactKind.OVERHEAD, tube, v[i], time)
+                    v[i] *= -0.32f
+                }
+            }
+            quiet = quiet && abs(v[i]) < restSpeed && overlap(column, i) > 0f
+        }
+        column.beadQuietTime = if (quiet) column.beadQuietTime + dt else 0f
+        if (column.beadQuietTime >= 0.045f) {
+            // Retain the tiny static compression under the stack's weight.
+            for (i in 0 until n) {
+                v[i] = 0f
+                column.resting[i] = true
+            }
+            column.awake = false
+        }
     }
 
     /** Equal stones meeting along one line: they trade velocity, losing a little. */
@@ -171,8 +283,9 @@ internal class SettlingColumns(
 
     companion object {
         /** Tuned so the first hop keeps the pace of the earlier authored rebound. */
+        const val BEAD_DIAMETER = 0.86f
         const val GRAVITY_SLOTS = 52f
-        const val FLOOR_RESTITUTION = 0.4f
+        const val FLOOR_RESTITUTION = 0.70f
         const val CEILING_RESTITUTION = 0.45f
         const val STONE_RESTITUTION = 0.92f
         /** Slowest closing speed, in slots per second, that counts as a contact worth reporting. */

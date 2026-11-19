@@ -6,9 +6,9 @@ import kotlin.math.*
 internal class GroupRoute(val spine: StoneRoute, val count: Int, val slot: Float) {
     private val leadingStart = (count - 1) * slot
     val length = (spine.length - leadingStart).coerceAtLeast(0f)
-    val fallHeight = spine.fallHeight
     val releaseFraction = if (length > 0)
         ((spine.releaseFraction * spine.length - leadingStart) / length).coerceIn(0f, 1f) else 0f
+    val fallHeight = length * (1f - releaseFraction)
 
     fun at(fraction: Float): List<FlightPoint> {
         val positions = mutableListOf<FlightPoint>()
