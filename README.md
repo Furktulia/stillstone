@@ -1,4 +1,4 @@
-# Ball Sort Game
+# Stillstone
 
 A calm, offline Android puzzle game built around the feel of each move. Tap a vial and matching pieces lift and travel together. Stones land with a gentle clack, while water beads squash and rebound with softer taps. You can make your next move while pieces are still settling.
 
