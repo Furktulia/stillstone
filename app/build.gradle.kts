@@ -32,20 +32,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Debug builds are signed with a key kept in the project, not the one Android Studio
-    // creates per machine in ~/.android. Android only updates an installed app when the
-    // signature matches, so a per-machine key made playtest phones refuse new builds
-    // (and lose their saves on reinstall) whenever Android Studio was set up again.
-    // This is a debug key with the standard public password; never use it for a release.
-    signingConfigs {
-        getByName("debug") {
-            storeFile = file("playtest-debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     buildTypes {
         release {
             // Shrinks and optimises the whole app with R8. Written the classic way because the
@@ -57,7 +43,7 @@ android {
         // What testers should get. Debug builds are unoptimised and debuggable, and Compose runs
         // several times slower in them: a friend's Snapdragon 778G phone found the debug build laggy.
         // This is the release build (shrunk and optimised, with the baseline profile), signed with
-        // the playtest key so it installs over earlier debug builds and keeps their saves.
+        // the local debug key, so it can update builds signed on the same machine.
         create("playtest") {
             initWith(getByName("release"))
             signingConfig = signingConfigs.getByName("debug")

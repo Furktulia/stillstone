@@ -123,7 +123,7 @@ are in docs/mocks/landscape-before and landscape-after.
   260 dp) and the painting strip is capped at 58% of the stretch so the name stays clear.
   No new art: the existing 20:9 wide paintings already cover wide screens.
 - Settings already caps at 420 dp; unchanged.
-- Not tested on a real foldable; checked on the emulator resized to 1856x2160 at density 420.
+- The layout was checked upright and sideways on an emulator at 1856×2160 and density 420. A tester also tried it on a Samsung Fold 8 before merge and reported that it worked well.
 
 ## Current scope
 

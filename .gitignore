@@ -13,8 +13,6 @@
 *.jks
 *.keystore
 key.properties
-# The shared debug key is deliberately committed so every machine signs playtest builds alike.
-!/app/playtest-debug.keystore
 
 *.iml
 .gradle

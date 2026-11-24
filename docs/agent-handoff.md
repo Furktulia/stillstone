@@ -260,12 +260,11 @@ Instrumentation once removed the real emulator save during cleanup.
 KEEP android.injected.androidTest.leaveApksInstalledAfterRun=true and use
 in-memory/isolated test stores. Never clear real player data to simplify a test.
 Install updates over the app without uninstalling.
-Debug builds use the committed app/playtest-debug.keystore (see README). Do not delete or
-regenerate it: a changed signature forces every tester to uninstall and lose their save.
+This source copy uses the local Android debug key for debug and playtest builds. Keep distributing updates for existing private playtest installations through the private build channel so their signatures and saves are preserved.
 
 **Give testers the playtest build, never the debug one** (2026-11-16): `.\gradlew.bat :app:assemblePlaytest`
 → `app/build/outputs/apk/playtest/app-playtest.apk`. It is the release build (R8, library baseline
-profiles), signed with the same playtest key, so it installs over a debug build and keeps the save.
+profiles), signed with the local debug key in this source copy.
 A tester on a Xiaomi 12 Lite (Snapdragon 778G, 120 Hz) found the debug build laggy: Compose runs
 much slower in a debuggable, unoptimised app. The release build had never been run before and crashed
 at start (R8 `packageScope` limited to libraries); it now optimises the whole app.
@@ -323,9 +322,7 @@ Generated artwork is an asset, never the source of native buttons/text.
 
 ## 9. Validation status and environment
 
-Windows Android Studio project, originally:
-C:/Users/furtu/AndroidStudioProjects/Ballsortgame.
-Primary testing: Android Emulator; meaningful milestones: Samsung Galaxy S25+.
+Development checks used Android Studio and Android Emulator. The creator and testers also tried the game on phones, including a Samsung Galaxy S25+ and a Samsung Fold 8. The Fold 8 tester reported that the foldable layout worked well before the change was merged.
 Portrait first. Phones are locked to portrait; large screens (unfolded foldables, sw >= 600 dp)
 rotate and reflow; see "Phones portrait, large screens reflow" in world-ui.md (2026-11-15).
 

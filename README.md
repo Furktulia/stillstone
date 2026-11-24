@@ -1,63 +1,20 @@
 # Ball Sort Game
 
-A calm, offline Android ball-sort puzzle game built with Kotlin and Jetpack Compose.
-This is a working playtest app, not yet a finished release.
+An offline Android puzzle game built with Kotlin and Jetpack Compose. Sort matching pieces into vials across 247 campaign puzzles in Dusk, Moonlight, and Midnight, or create another puzzle in Infinite mode.
 
-**New agent: start with [the handoff](docs/agent-handoff.md) and
-[the current remaining queue](docs/next-steps.md).**
-[AGENTS.md](AGENTS.md) contains collaboration and workspace precautions.
+The game includes undo, hints, saved progress, optional color labels, reduced motion, and a choice of stones or water beads. Phones use a portrait layout. Large screens reflow, and a tester reported that the foldable layout worked well on a Samsung Fold 8.
 
-## Current build
+## Build and test
 
-- Android app module: `app`, minimum API 29, target/compile API 37.
-- Pure Kotlin rules, solving, generation and desktop authoring: `puzzle-engine`.
-- 32 curated puzzles across Dusk, Moonlight and Midnight; all available for testing.
-- Seeded offline Infinite, hints, undo/restart, saved boards/history and example export.
-- Nighttime world entrances, level selection, stone controls and generated art.
-- Ball motion and sound are still being refined; known physics issues are documented.
+Open the repository in Android Studio with Android SDK 37 installed. The app supports Android 10 (API 29) and later. The `app` module contains the Android UI. The `puzzle-engine` module contains the rules, solver, and offline puzzle generator.
 
-## Build and test on Windows
-
-Use Android Studio's configured Gradle JDK. From the project root:
-
-~~~powershell
-.\gradlew.bat :app:assembleDebug
+```powershell
+.\gradlew.bat :app:assemblePlaytest
 .\gradlew.bat :puzzle-engine:test :app:testDebugUnitTest
-.\gradlew.bat :app:connectedDebugAndroidTest
-.\gradlew.bat :app:lintDebug
-~~~
+```
 
-Run app on the selected emulator through Android Studio.
-Debug APK: `app/build/outputs/apk/debug/app-debug.apk`.
-Do not uninstall or clear data when installing an update: player saves and
-Infinite examples are private app data.
+The optimized playtest APK is written to `app/build/outputs/apk/playtest/app-playtest.apk`. Debug and playtest builds use the local Android debug key. For anyone already using a private playtest build, keep updating from the private build channel to preserve saved progress. Android requires the same signing key for in-place updates.
 
-Debug builds are signed with `app/playtest-debug.keystore`, which is committed on purpose.
-Android only updates an installed app when the signature matches, so every machine must
-sign playtest builds with this same key. Builds made before 2026-11-12 used a per-machine
-key: a phone that still has one needs a single uninstall (export Infinite examples first).
-Never use this key for a release.
+Art and fonts are bundled and decoded during the build. Gameplay does not require a network connection.
 
-Art/font decoding is part of the offline Gradle build; no API key or runtime
-download is required. Sync Gradle after build-script changes.
-
-## Documentation map
-
-| Document | Purpose |
-| --- | --- |
-| [Agent handoff](docs/agent-handoff.md) | Product intent, decisions, source map, known issues, validation limits |
-| [Next steps](docs/next-steps.md) | Prioritized current backlog and optional ideas |
-| [World UI](docs/world-ui.md) | Approved visual direction, rendering, assets and recent UI checks |
-| [Feel playtest](docs/feel-playtest.md) | Movement, routing, synthetic sound and phone feedback |
-| [Puzzle quality](docs/puzzle-quality.md) | Engine review, shared analyzer, tiers, E2 Infinite recipe, tier pool |
-| [Infinite mode](docs/infinite-mode.md) | Seed codes, examples, storage/export and limitations |
-| [Engine README](puzzle-engine/README.md) | Rules, solver/generator contracts and lab commands |
-| [Level workshop](docs/level-workshop.md) | Offline generation, review and pack selection |
-| [Challenge selection](docs/challenge-selection.md) | Decision-based screening and human-feedback references |
-| [Difficulty investigation](docs/difficulty-investigation.md) | Capacity/difficulty study and limits |
-| [Algorithm validation](docs/algorithm-validation.md) | Correctness investigations and historical checks |
-| [Playtesting](docs/playtesting.md) | Earlier playable milestone and save-retention precautions |
-| [Original product plan](docs/product-plan.md) | Historical discovery/milestones; not the current completion status |
-
-Validation counts in individual documents describe their particular milestone.
-Read the handoff before interpreting old “not implemented” or “not tested” statements.
+See [the engine README](puzzle-engine/README.md) for puzzle tooling, [the layout notes](docs/world-ui.md) for device layout details, and [the motion and audio review](docs/beads-and-impact-audio.md) for material behavior and validation.
