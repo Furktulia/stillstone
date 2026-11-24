@@ -1,8 +1,8 @@
 # Ball Sort Game
 
-An offline Android puzzle game built with Kotlin and Jetpack Compose. Sort matching pieces into vials across 247 campaign puzzles in Dusk, Moonlight, and Midnight, or create another puzzle in Infinite mode.
+A calm, offline Android puzzle game built around the feel of each move. Tap a vial and matching pieces lift and travel together. Stones land with a gentle clack, while water beads squash and rebound with softer taps. You can make your next move while pieces are still settling.
 
-The game includes undo, hints, saved progress, optional color labels, reduced motion, and a choice of stones or water beads. Phones use a portrait layout. Large screens reflow, and a tester reported that the foldable layout worked well on a Samsung Fold 8.
+Sort your way through 247 campaign puzzles across Dusk, Moonlight, and Midnight, or generate another puzzle in Infinite mode. The game includes undo, hints, saved progress, optional color labels, and reduced motion. Phones use a portrait layout. Large screens reflow, and a tester reported that the foldable layout worked well on a Samsung Fold 8.
 
 ## Build and test
 
